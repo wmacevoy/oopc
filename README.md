@@ -1,10 +1,10 @@
 #OOPC - Object Orientd Programming in C
 
-#
-# The goal of this project is to demonstrate how to create a
-# single-inheretence C api which can be wrapped to tranparently
-# work as a C++ API with the same inheretence.
-#
+
+The goal of this project is to demonstrate how to create a single-inheretence
+C api which can be wrapped to tranparently work as a C++ API with the same
+inheretence.
+
 
 The base class is Bottle with an effective C++ structure of
 ```
