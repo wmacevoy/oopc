@@ -1,13 +1,12 @@
-#OOPC - Object Orientd Programming in C
+# OOPC - Object Oriented Programming in C
 
-
-The goal of this project is to demonstrate how to create a single-inheretence
-C api which can be wrapped to tranparently work as a C++ API with the same
-inheretence.
-
+The goal of this project is to demonstrate how to create a single-inheritance
+C api which can be wrapped to transparently work as a C++ API with the same
+inheritance.
 
 The base class is Bottle with an effective C++ structure of
-```
+
+```c++
    struct Bottle {
       double volume;
       Bottle() { volume=0; }
@@ -16,8 +15,10 @@ The base class is Bottle with an effective C++ structure of
       virtual ~Bottle() {}
    };
 ```
+
 The derived class is SizedBottle
-```
+
+```c++
    struct SizedBottle : Bottle {
       double maxVolume;
       SizedBottle() { maxVolume=1; }
@@ -31,6 +32,3 @@ The derived class is SizedBottle
       virtual ~Bottle() {}
    };
 ```
-
-
-
