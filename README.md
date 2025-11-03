@@ -29,6 +29,6 @@ The derived class is SizedBottle
       }
       virtual void setMaxVolume(double value) { maxVolume=value; }
       virtual double getMaxVolume() const { return maxVolume; }
-      virtual ~Bottle() {}
+      virtual ~SizedBottle() {}
    };
 ```

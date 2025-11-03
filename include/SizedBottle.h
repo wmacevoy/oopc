@@ -20,7 +20,7 @@ extern "C" {
     void (*setMaxVolume)(SizedBottle *me,double value);
   } SizedBottleVftbl;
 
-  SizedBottleVftbl *SizedBottle_vftbl();
+  const SizedBottleVftbl *SizedBottle_vftbl();
 
   struct SizedBottleStruct {
     /* exactly match Bottle decl first (base class) with new vftbl */

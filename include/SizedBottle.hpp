@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Bottle.hpp"
+
 #include "SizedBottle.h"
 
 namespace cxx {
@@ -8,13 +10,13 @@ namespace cxx {
   private: ::SizedBottle me;
 
   protected: inline SizedBottle(enum UNINITIALIZED value) 
-    : Bottle(UNINITIALIZED)
+    : Bottle(Bottle::UNINITIALIZED)
     {
       printf("SizedBottle(UNINITIALIZED)\n");
     }
 
   public: inline SizedBottle()
-    : Bottle(UNINITIALIZED) 
+    : Bottle(Bottle::UNINITIALIZED) 
     { 
       printf("SizedBottle()\n");
       ::SizedBottle_init(&me); 

@@ -12,7 +12,7 @@ extern "C" {
     void (*setVolume)(Bottle *me, double value);
   } BottleVftbl;
 
-  BottleVftbl *Bottle_vftbl();
+  const BottleVftbl *Bottle_vftbl();
 
   struct BottleStruct {
     const BottleVftbl *vftbl;

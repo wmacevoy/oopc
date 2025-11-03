@@ -36,9 +36,9 @@ extern "C" {
 
   static SizedBottleVftbl vftbl = {0};
 
-  SizedBottleVftbl *SizedBottle_vftbl() {
+  const SizedBottleVftbl *SizedBottle_vftbl() {
     if (vftbl.fini == 0) {
-      BottleVftbl *super=Bottle_vftbl();
+      const BottleVftbl *super=Bottle_vftbl();
       vftbl.fini = fini;
       vftbl.getVolume = (double (*)(const SizedBottle *me)) super->getVolume;
       vftbl.setVolume = setVolume;

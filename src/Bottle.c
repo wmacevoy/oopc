@@ -26,7 +26,7 @@ extern "C" {
 
   static BottleVftbl vftbl = {0};
 
-  BottleVftbl *Bottle_vftbl() {
+  const BottleVftbl *Bottle_vftbl() {
     if (vftbl.fini == 0) {
       vftbl.fini = fini;
       vftbl.getVolume = getVolume;
