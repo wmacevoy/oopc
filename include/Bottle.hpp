@@ -46,7 +46,7 @@ namespace cxx {
     /* Derived wrappers pass this tag to the base constructor: the most-derived
        class's C _init initializes the whole object, this prefix included. */
   protected: enum UNINITIALIZED { UNINITIALIZED };
-  protected: inline Bottle(enum UNINITIALIZED value) 
+  protected: inline Bottle(enum UNINITIALIZED) 
     { 
       printf("Bottle(UNINITIALIZED)\n"); 
     }    

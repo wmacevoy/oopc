@@ -38,10 +38,12 @@ Inheritance is by **prefix layout**; upcast is a plain pointer cast. Two invaria
 
 Reordering anything in `Bottle.h` requires mirroring it into `SizedBottle.h` in the same commit.
 
+**Every vtable slot takes `Bottle *` — the root base type — at every level, however deep.** That is the invariant that keeps the pattern cast-free: a derived class inherits a slot by naming the same function pointer (`SizedBottle`'s table lists `Bottle_vf_getVolume` verbatim), and each implementation downcasts its argument internally, which is an ordinary data-pointer cast. Never retype a slot to the derived class — that reintroduces a function-pointer cast, which is UB (C11 6.5.2.2p9) and traps under CFI. A mistyped slot is now a compile error (`-Wincompatible-function-pointer-types`).
+
 Three layers per class:
 
-- **`static` implementations** in the `.c` — the real behavior, never called directly from outside.
-- **`Class_vftbl()`** — a lazily-filled file-static vtable singleton. A derived table copies the base slots it inherits and installs its own for what it overrides (`SizedBottle` overrides `setVolume`, inherits `getVolume`).
+- **`Class_vf_method` implementations** — the real behavior. Non-`static` and declared in the header under a "protected" comment, so a derived class in another translation unit can name them, both to inherit a slot and to chain to the base version. Not for application code.
+- **`Class_vftbl()`** — returns a `static const` table, initialized at compile time, so it lands in read-only data (`__DATA_CONST,__const`). No lazy fill-in, hence no data race and nothing writable to corrupt.
 - **Public `Class_method(me, ...)`** — thin dispatchers that go through `me->vftbl->method(...)`. That indirection *is* the virtual call; calling `Bottle_setVolume` on an upcast `SizedBottle*` runs the derived clamping logic. Never bypass it by touching `me->volume` directly.
 
 Lifecycle is split so objects can live in caller-supplied storage — the C++ wrapper depends on this:
@@ -49,7 +51,7 @@ Lifecycle is split so objects can live in caller-supplied storage — the C++ wr
 - `Class_init` / `Class_fini` operate on existing memory. Derived `_init` calls base `_init` first, then **overwrites** `me->vftbl` with the derived table and sets its own fields.
 - `Class_new` / `Class_delete` are `malloc`+`_init` and `_fini`+`free`. One allocation at one address, so `free` through an upcast base pointer is correct.
 
-**Footgun:** a derived class's `fini` slot must chain via `Bottle_vftbl()->fini(...)`. Writing the natural-looking `Bottle_fini(me)` re-dispatches virtually and recurses infinitely.
+**Footgun:** a derived class's `fini` slot chains to the base with a direct, non-virtual call — `Bottle_vf_fini(base)`. Writing the natural-looking `Bottle_fini(me)` re-dispatches through the vtable, lands back in the same function, and recurses forever.
 
 ### The C++ wrapper (`include/Bottle.hpp`, `include/SizedBottle.hpp`, namespace `cxx`)
 
@@ -71,7 +73,8 @@ Adding a class means: `include/X.h` (vtable slots + declarations mirroring the b
 
 ## Known issues in the C layer (not yet addressed)
 
-- `SizedBottle_vftbl()` casts a base function pointer to a derived signature. Calling through an incompatible function-pointer type is UB in C11 6.5.2.2p9 and breaks under CFI (`-fsanitize=cfi-icall`). Typing every vtable slot to take `Bottle *` and downcasting inside each impl would remove every cast.
-- Vtables are lazily built and land in `__DATA,__bss` — only the *pointer* is `const`. Two threads in `Bottle_new()` race on the `vftbl.fini == 0` guard. Fixing the cast above removes the need for lazy init, allowing `static const` tables in `.rodata`.
 - No runtime type identity, so no checked downcast. Adding `parent` and `name` as the first two vtable slots costs two words per *class* and zero per object.
 - Every function `printf`s unconditionally. Fine for a demo, wrong for a library — guard with `#if defined(DEBUG)` before this is consumed as one.
+
+
+The tree builds warning-free under `-Wall -Wextra -Wpedantic`; keep it that way.

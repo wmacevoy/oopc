@@ -7,101 +7,113 @@
 extern "C" {
 #endif
 
-  static void setVolume(SizedBottle *me, double value)
+  /*
+    vtable implementations.  Each takes Bottle * (the slot type) and downcasts
+    to SizedBottle * -- an ordinary data pointer cast, valid because a
+    SizedBottle starts with a Bottle.  Nothing here casts a function pointer.
+  */
+
+  void SizedBottle_vf_setVolume(Bottle *base, double value)
   {
-    printf("SizedBottle vf setVolume(%p,%lf)\n",me,value);
+    SizedBottle *me = (SizedBottle*)base;
+    printf("SizedBottle vf setVolume(%p,%lf)\n",(void*)me,value);
     if (value < 0) value=0;
     if (value > me->maxVolume) value=me->maxVolume;
     me->volume=value;
   }
 
-  static double getMaxVolume(const SizedBottle *me)
+  double SizedBottle_vf_getMaxVolume(const Bottle *base)
   {
-    printf("SizedBottle vf getMaxVolume(%p)\n",me);
+    const SizedBottle *me = (const SizedBottle*)base;
+    printf("SizedBottle vf getMaxVolume(%p)\n",(void*)me);
     return me->maxVolume;
   }
 
-  static void setMaxVolume(SizedBottle *me, double value)
+  void SizedBottle_vf_setMaxVolume(Bottle *base, double value)
   {
-    printf("SizedBottle vf setMaxVolume(%p,%lf)\n",me,value);
+    SizedBottle *me = (SizedBottle*)base;
+    printf("SizedBottle vf setMaxVolume(%p,%lf)\n",(void*)me,value);
     if (value < 0) value = 0;
     me->maxVolume = value;
   }
 
-  static void fini(SizedBottle *me)
+  void SizedBottle_vf_fini(Bottle *base)
   {
-    printf("SizedBottle vf fini(%p)\n",me);
-    Bottle_vftbl()->fini((Bottle*)me);
+    printf("SizedBottle vf fini(%p)\n",(void*)base);
+    /* chain to the base implementation: a direct, NON-virtual call.  Calling
+       Bottle_fini here instead would re-dispatch through the vtable, land back
+       in this function, and recurse forever. */
+    Bottle_vf_fini(base);
   }
 
-  static SizedBottleVftbl vftbl = {0};
+  /* Compile-time const table.  getVolume is inherited by naming Bottle's
+     implementation directly -- the slot types match, so there is no cast and no
+     need to look the base table up at runtime. */
+  static const SizedBottleVftbl vftbl = {
+    SizedBottle_vf_fini,
+    Bottle_vf_getVolume,
+    SizedBottle_vf_setVolume,
+    SizedBottle_vf_getMaxVolume,
+    SizedBottle_vf_setMaxVolume
+  };
 
-  const SizedBottleVftbl *SizedBottle_vftbl() {
-    if (vftbl.fini == 0) {
-      const BottleVftbl *super=Bottle_vftbl();
-      vftbl.fini = fini;
-      vftbl.getVolume = (double (*)(const SizedBottle *me)) super->getVolume;
-      vftbl.setVolume = setVolume;
-      vftbl.getMaxVolume = getMaxVolume;
-      vftbl.setMaxVolume = setMaxVolume;
-    }
+  const SizedBottleVftbl *SizedBottle_vftbl(void) {
     return &vftbl;
   }
 
-  SizedBottle *SizedBottle_new()
+  SizedBottle *SizedBottle_new(void)
   {
     SizedBottle *me=(SizedBottle*)malloc(sizeof(SizedBottle));
-    printf("SizedBottle_new()=%p\n",me);
+    printf("SizedBottle_new()=%p\n",(void*)me);
     if (me != 0) SizedBottle_init(me);
     return me;
   }
 
   void SizedBottle_delete(SizedBottle *me) {
-    printf("SizedBottle_delete(%p)\n",me);
+    printf("SizedBottle_delete(%p)\n",(void*)me);
     if (me != 0) {
       SizedBottle_fini(me);
-      printf("delete SizedBottle@%p\n",me);
+      printf("delete SizedBottle@%p\n",(void*)me);
       free(me);
     }
   }
 
   void SizedBottle_init(SizedBottle *me) {
-    printf("SizedBottle_init(%p)\n",me);
+    printf("SizedBottle_init(%p)\n",(void*)me);
     Bottle_init((Bottle*)me);
     me->vftbl=SizedBottle_vftbl();
     me->maxVolume=1;
   }
 
   void SizedBottle_fini(SizedBottle *me) {
-    printf("SizedBottle_fini(%p)\n",me);
-    me->vftbl->fini(me);
+    printf("SizedBottle_fini(%p)\n",(void*)me);
+    me->vftbl->fini((Bottle*)me);
   }
   
   double SizedBottle_getVolume(const SizedBottle *me)
   {
-    printf("SizedBottle_getVolume(%p)\n",me);
-    return me->vftbl->getVolume(me);
+    printf("SizedBottle_getVolume(%p)\n",(void*)me);
+    return me->vftbl->getVolume((const Bottle*)me);
   }
   
   void SizedBottle_setVolume(SizedBottle *me, double value)
   {
-    printf("SizedBottle_setVolume(%p,%lf)\n",me,value);
-    me->vftbl->setVolume(me,value);
+    printf("SizedBottle_setVolume(%p,%lf)\n",(void*)me,value);
+    me->vftbl->setVolume((Bottle*)me,value);
   }
 
   double SizedBottle_getMaxVolume(const SizedBottle *me)
   {
-    printf("SizedBottle_getMaxVolume(%p)\n",me);
-    return me->vftbl->getMaxVolume(me);
+    printf("SizedBottle_getMaxVolume(%p)\n",(void*)me);
+    return me->vftbl->getMaxVolume((const Bottle*)me);
   }
   
   void SizedBottle_setMaxVolume(SizedBottle *me, double value)
   {
-    printf("SizedBottle_setMaxVolume(%p,%lf)\n",me,value);
-    me->vftbl->setMaxVolume(me,value);
+    printf("SizedBottle_setMaxVolume(%p,%lf)\n",(void*)me,value);
+    me->vftbl->setMaxVolume((Bottle*)me,value);
   }
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-

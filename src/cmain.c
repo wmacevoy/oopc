@@ -15,7 +15,7 @@ void testAndDelete(Bottle *b)
   Bottle_delete(b);
 }
 
-int main()
+int main(void)
 {
   {
     printf("plain bottle\n");

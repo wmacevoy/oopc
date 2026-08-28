@@ -31,6 +31,13 @@ namespace cxx {
        byte-identical to a ::SizedBottle; the static_asserts below prove it. */
   private: alignas(::SizedBottle) char extra[sizeof(::SizedBottle) - sizeof(::Bottle)];
 
+    /* C++ never reads or writes extra -- the C layer owns those bytes -- so the
+       only thing to say about it is that it covers exactly the gap between the
+       base's C struct and ours.  Stating that here also keeps the field from
+       looking unused to -Wunused-private-field. */
+    static_assert(sizeof(::Bottle) + sizeof(extra) == sizeof(::SizedBottle),
+                  "extra must cover exactly what ::SizedBottle adds to ::Bottle");
+
   public: inline ::SizedBottle *me() 
     { 
       return reinterpret_cast< ::SizedBottle *>(Bottle::me()); 
@@ -40,7 +47,7 @@ namespace cxx {
       return reinterpret_cast<const ::SizedBottle *>(Bottle::me()); 
     }
 
-  protected: inline SizedBottle(enum UNINITIALIZED value) 
+  protected: inline SizedBottle(enum UNINITIALIZED) 
     : Bottle(Bottle::UNINITIALIZED)
     {
       printf("SizedBottle(UNINITIALIZED)\n");
