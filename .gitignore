@@ -1,2 +1,7 @@
 tmp/*
 bin/*
+dist/
+.viki/
+__pycache__/
+*.pyc
+node_modules/

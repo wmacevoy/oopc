@@ -4,28 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-A demonstration of single-inheritance object orientation in plain C, wrapped so the *same* hierarchy is usable from C++ at **zero memory or dispatch overhead**. `Bottle` is the base, `SizedBottle` the derived class. The C layer is the single source of truth; the C++ layer in `include/*.hpp` is a view over it, never a reimplementation.
+A teaching demo of single-inheritance object orientation in plain C, wrapped so the *same* hierarchy appears natively in C++, Python and JavaScript with **no per-class glue in any of them**. `Bottle` is the base, `SizedBottle` the derived class; the domain is deliberately trivial so nothing distracts from the mechanism.
 
-The measurable goal: `sizeof(cxx::X) == sizeof(::X)` for every class, at any hierarchy depth, with no C++ vtable pointer anywhere. `src/cppmain.cpp` prints these sizes and `static_assert`s enforce them.
+The C ABI is the interface. Every binding is written in its host language only:
 
-## Build & run
+| layer | files | costs |
+|---|---|---|
+| C | `include/*.h`, `src/*.c` | one vtable pointer per object, one vtable + one Type per class |
+| C++ | `include/*.hpp` | zero extra bytes, no C++ vtable pointer |
+| Python | `python/oopc.py` | ctypes; no extension module |
+| JavaScript | `js/oopc.mjs` | wasm exports; no glue module |
+
+Two measurable goals, both enforced by `static_assert` rather than by convention: `sizeof(cxx::X) == sizeof(::X)` at any depth, and no C++ vtable pointer anywhere.
+
+## Build & test
 
 ```bash
-make all        # bin/cbottle (C demo), bin/cppbottle (C++ demo)
+make all          # bin/cbottle, bin/cppbottle, bin/liboopc.<dylib|so>
+make test         # C, C++, Python  (test-c / test-cpp / test-python individually)
 make clean
-./bin/cbottle
-./bin/cppbottle
 ```
 
-There is no test suite. The demos are verified by reading their trace output — every function prints its own entry, so the output *is* the proof that dispatch went where it should.
+The Python and JS suites are assertion-based (`python/test_oopc.py`, `js/test_oopc.mjs`); the C and C++ demos are checked by exit status and read for their trace output.
 
-Useful checks:
+WebAssembly needs Emscripten, which CI installs — `make wasm && make test-js`. There is also a toolchain-free build: `make wasm-raw WASM_CC=<clang> WASI_SYSROOT=<sysroot>` targets wasm32 with the wasi-libc *headers* but links no libc, leaving `malloc`/`free` as imports the host supplies (see `js/load.mjs`). ~2.9 KB, runs in node and the browser with no shim, and `js/test_oopc.mjs` runs against whichever build is present.
+
+Useful checks — CI runs all of these:
 
 ```bash
-make clean && make CFLAGS="-g -Iinclude -fsanitize=undefined -fno-sanitize-recover=all" all
+make clean && make CFLAGS="-g -Iinclude -fPIC -Wall -Wextra -Wpedantic -Werror" all
+make clean && make CFLAGS="-g -Iinclude -fPIC -fsanitize=undefined -fno-sanitize-recover=all" all
+make clean && make CFLAGS="-g -Iinclude -fPIC -DDEBUG" all      # tracing on
 ```
 
-Note `CXXFLAGS` derives from `CFLAGS`, so a `CFLAGS` override reaches C++ too — but keep `-Iinclude` in it. ASan does not initialize on this macOS setup; UBSan works.
+Note `CXXFLAGS` derives from `CFLAGS`, so a `CFLAGS` override reaches C++ too — but keep `-Iinclude -fPIC` in it. ASan does not initialize on this macOS setup; UBSan works.
 
 ## Architecture
 
@@ -71,10 +83,35 @@ The rules, enforced by `static_assert` on size and alignment in each header:
 
 Adding a class means: `include/X.h` (vtable slots + declarations mirroring the base prefix), `src/X.c` (static impls, vtable wiring, dispatchers), `include/X.hpp` (the five rules above). All hand-written; nothing is generated.
 
-## Known issues in the C layer (not yet addressed)
+### Runtime types (`include/Type.h`)
 
-- No runtime type identity, so no checked downcast. Adding `parent` and `name` as the first two vtable slots costs two words per *class* and zero per object.
-- Every function `printf`s unconditionally. Fine for a demo, wrong for a library — guard with `#if defined(DEBUG)` before this is consumed as one.
+`Type { name, parent, size }` — three words per class, zero per object. Objects carry no type tag; they reach their `Type` through the vtable's first slot, so `Type_of` is one double indirection. `Type_isa` walks the parent chain; `Class_cast` is the checked downcast that makes the foreign bindings safe.
 
+`size` is what lets a **host** allocate an object without knowing C's `sizeof`. With the `Class_init`/`Class_fini` split it means Python and JS can own the memory and C never needs an allocator — both test suites exercise that path.
 
-The tree builds warning-free under `-Wall -Wextra -Wpedantic`; keep it that way.
+Every class exposes its Type three ways, deliberately: the `Class_type` object (for a derived class's static initializer), and `Class_getType()` (because a plain function is the one thing every FFI can reach — ctypes, raw wasm exports and Emscripten all differ on data symbols).
+
+### Tracing (`include/Trace.h`)
+
+`TRACE(...)` compiles to nothing without `-DDEBUG`, but expands to `if (0) Trace(...)` rather than nothing at all, so arguments stay type-checked and a stale format string is a compile error. Demo `printf`s in `cmain.c`/`cppmain.cpp` are *not* traces and stay unconditional.
+
+`Trace_to()` redirects the sink at runtime. Under Emscripten stdout is already `console.log`, so a wasm `-DDEBUG` build traces to the JS console unaided. These writes go to fd 1 and bypass `sys.stdout`, so under CPython they interleave out of order and under Jupyter they miss the cell entirely.
+
+### Bindings (`python/oopc.py`, `js/oopc.mjs`)
+
+Both follow the same shape, and it is the whole point: **the host language's single inheritance maps 1:1 onto the C hierarchy.** A derived wrapper declares only the methods it *adds*. Inherited methods call the *base* C functions, which dispatch through the C vtable into the derived override. In JS, `SizedBottle` needs no constructor at all — `Bottle`'s uses `new.target._C` to pick the right C constructor.
+
+Neither binding has per-class C code. Adding a class means adding a C class and a ~10-line subclass in each host language.
+
+`js/oopc.mjs` is module-agnostic: it accepts either an Emscripten `Module` (functions at `Module._Name`) or a raw `WebAssembly.Instance`'s exports. Loading lives in `js/load.mjs`.
+
+## CI
+
+`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; and a release job on `v*` tags. Artifacts upload per platform.
+
+## Known issues (not yet addressed)
+
+- `make wasm-raw` hardcodes a Homebrew default for `WASI_SYSROOT`; override it elsewhere.
+- The wasm path is exercised in CI only. Locally, only `wasm-raw` builds without an Emscripten install.
+
+The tree builds warning-free under `-Wall -Wextra -Wpedantic`; CI enforces it with `-Werror`.

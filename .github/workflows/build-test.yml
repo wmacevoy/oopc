@@ -1,0 +1,138 @@
+name: build-test
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: liboopc-linux-x64.so
+            lib: bin/liboopc.so
+          - os: ubuntu-24.04-arm
+            artifact: liboopc-linux-arm64.so
+            lib: bin/liboopc.so
+          - os: macos-latest
+            artifact: liboopc-macos-arm64.dylib
+            lib: bin/liboopc.dylib
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The pattern's invariants are enforced by the compiler -- static_asserts
+      # on layout, and function-pointer types on the vtable slots. -Werror keeps
+      # it that way.
+      - name: Build warning-free
+        run: |
+          make clean
+          make CFLAGS="-g -Iinclude -fPIC -Wall -Wextra -Wpedantic -Werror" all
+
+      - name: Test (C, C++, Python via ctypes)
+        run: |
+          make clean
+          make all
+          make test
+
+      - name: UndefinedBehaviorSanitizer
+        run: |
+          make clean
+          make CFLAGS="-g -Iinclude -fPIC -fsanitize=undefined -fno-sanitize-recover=all" all
+          ./bin/cbottle > /dev/null
+          ./bin/cppbottle > /dev/null
+
+      - name: Trace build still compiles and runs
+        run: |
+          make clean
+          make CFLAGS="-g -Iinclude -fPIC -DDEBUG" all
+          ./bin/cbottle | head -5
+
+      - name: Package artifact
+        run: |
+          make clean
+          make all
+          cp ${{ matrix.lib }} ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build wasm
+        run: make wasm
+
+      - name: Test JS binding
+        run: make test-js
+
+      # Emscripten wires stdout to console.log, so a -DDEBUG build traces
+      # straight into the JS console with no work on our side.
+      - name: Traces reach the JS console
+        run: |
+          make wasm-debug
+          node -e "
+            const m = await (await import('./bin/oopc-debug.js')).default();
+            const p = m._SizedBottle_new();
+            m._SizedBottle_setMaxVolume(p, 10);
+            m._Bottle_setVolume(p, 100);
+            m._Bottle_delete(p);
+          " 2>&1 | tee trace.txt
+          grep -q "SizedBottle vf setVolume" trace.txt
+          grep -q "SizedBottle vf fini" trace.txt
+          echo "traces confirmed on console"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oopc-wasm
+          path: |
+            bin/oopc.js
+            bin/oopc.wasm
+            js/oopc.mjs
+            js/load.mjs
+          retention-days: 90
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [native, wasm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Collect
+        run: |
+          mkdir -p dist
+          find artifacts -type f -exec cp {} dist/ \;
+          ls -lh dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*

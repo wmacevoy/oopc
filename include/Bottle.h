@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Type.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,14 +19,15 @@ extern "C" {
     implementation downcasts its Bottle * argument internally instead, which is
     an ordinary data pointer cast and exactly the prefix layout this pattern is
     built on.
+
+    The leading Type * is how any object reports its class: see Type.h.
   */
   typedef struct {
+    const Type *type;
     void (*fini)(Bottle *me);
     double (*getVolume)(const Bottle *me);
     void (*setVolume)(Bottle *me, double value);
   } BottleVftbl;
-
-  const BottleVftbl *Bottle_vftbl(void);
 
   struct BottleStruct {
     const BottleVftbl *vftbl;
@@ -39,16 +42,30 @@ extern "C" {
   double Bottle_getVolume(const Bottle *me);
   void Bottle_setVolume(Bottle *me,double value);
 
-  /*
-    "Protected": the vtable implementations themselves.  A derived class names
-    these to inherit a slot, or to chain to the base version from its own
-    override.  They are declared here (rather than being static) so a derived
-    class in another translation unit can build its table with a static
-    initializer -- which is what keeps the tables const.
+  /* Checked downcast -- 0 if `object` is not a Bottle or anything derived. */
+  Bottle *Bottle_cast(void *object);
 
-    Do not call these directly from application code; call the dispatchers
+  /* The class's Type, as a call.  Bottle_type below is the same object; this
+     exists because a plain function is the one thing EVERY foreign-function
+     interface can reach -- ctypes, wasm exports and Emscripten all differ on
+     how (or whether) they expose a data symbol. */
+  const Type *Bottle_getType(void);
+
+  /*
+    "Protected": the class's own constants and vtable implementations.
+
+    These are exposed, rather than being static, so a derived class in another
+    translation unit can name them in a STATIC INITIALIZER -- which is what lets
+    every vtable in the hierarchy be const, built at compile time, and placed in
+    read-only memory.  A derived class uses them to inherit a slot, to chain to
+    the base version from an override, and to set its Type's parent link.
+
+    Do not call the vf_ functions from application code; call the dispatchers
     above, which go through the vtable and so respect overrides.
   */
+  extern const Type Bottle_type;
+  extern const BottleVftbl Bottle_vftbl;
+
   void Bottle_vf_fini(Bottle *me);
   double Bottle_vf_getVolume(const Bottle *me);
   void Bottle_vf_setVolume(Bottle *me, double value);

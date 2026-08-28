@@ -1,0 +1,6 @@
+["_Type_of","_Type_isa","_Type_cast",
+ "_Bottle_new","_Bottle_delete","_Bottle_init","_Bottle_fini",
+ "_Bottle_getVolume","_Bottle_setVolume","_Bottle_cast","_Bottle_getType",
+ "_SizedBottle_new","_SizedBottle_delete","_SizedBottle_init","_SizedBottle_fini",
+ "_SizedBottle_getMaxVolume","_SizedBottle_setMaxVolume","_SizedBottle_cast","_SizedBottle_getType",
+ "_malloc","_free"]
