@@ -42,8 +42,10 @@ bin/cppbottle : tmp/cppmain.o $(OBJS)
 
 # Shared library -- this is the entire Python binding's dependency.  There is no
 # extension module and no C glue: python/oopc.py drives this with ctypes.
+# CFLAGS matters on the link line too: a sanitizer build needs its runtime, and
+# a macOS dylib (unlike a Linux .so) will not link with undefined symbols.
 $(SHLIB) : $(OBJS)
-	$(CC) $(SHARED_FLAG) -o $@ $^
+	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^
 
 .PHONY: all clean test test-c test-cpp test-python test-js wasm wasm-raw wasm-debug emcc-build
 

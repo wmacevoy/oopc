@@ -42,12 +42,15 @@ jobs:
           make all
           make test
 
+      # Runs the Python suite against the instrumented library too, so the C
+      # code is checked while being driven through ctypes.
       - name: UndefinedBehaviorSanitizer
         run: |
           make clean
           make CFLAGS="-g -Iinclude -fPIC -fsanitize=undefined -fno-sanitize-recover=all" all
           ./bin/cbottle > /dev/null
           ./bin/cppbottle > /dev/null
+          make test-python
 
       - name: Trace build still compiles and runs
         run: |
