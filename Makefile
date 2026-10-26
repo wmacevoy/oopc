@@ -98,6 +98,7 @@ WASI_SYSROOT?=/opt/homebrew/opt/wasi-libc/share/wasi-sysroot
 wasm-raw : bin/oopc.raw.wasm
 
 bin/oopc.raw.wasm : $(WASM_SRCS) $(wildcard include/*.h)
+	@test -d $(WASI_SYSROOT) || { echo "no wasi-libc sysroot at $(WASI_SYSROOT); set WASI_SYSROOT=<dir>"; exit 1; }
 	$(WASM_CC) --target=wasm32-wasip1 --sysroot=$(WASI_SYSROOT) -nostdlib -O2 -Iinclude \
 	  -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -o $@ $(WASM_SRCS)
 
