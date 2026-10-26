@@ -115,6 +115,47 @@ jobs:
             js/load.mjs
           retention-days: 90
 
+  # REQ2/BLD-1: nothing in the pattern may assume 64-bit pointers. On i386 a
+  # double is 4-byte aligned in structs, so the objects are 12 and 20 bytes --
+  # the case where a hard-coded 16/24 would break.
+  i386:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install 32-bit toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+
+      - name: Test (C, C++) at -m32
+        run: |
+          make clean
+          make CFLAGS="-m32 -g -Iinclude -fPIC -Wall -Wextra -Wpedantic -Werror" test-c test-cpp
+
+  # REQ2/BLD-2: the toolchain-free build -- clang and wasi-libc headers, no libc
+  # linked, no Emscripten. wasi-sdk ships both, pinned.
+  wasm-raw:
+    runs-on: ubuntu-latest
+    env:
+      WASI_SDK: wasi-sdk-25.0-x86_64-linux
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install wasi-sdk
+        run: |
+          curl -sSL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/$WASI_SDK.tar.gz | tar xz
+
+      - name: Build raw wasm
+        run: |
+          make wasm-raw WASM_CC=$PWD/$WASI_SDK/bin/clang WASI_SYSROOT=$PWD/$WASI_SDK/share/wasi-sysroot
+          echo "bin/oopc.raw.wasm: $(stat -c %s bin/oopc.raw.wasm) bytes"
+
+      - name: Test JS binding
+        run: make test-js
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [native, wasm]
