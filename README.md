@@ -34,8 +34,9 @@ Dispatch is **one vtable pointer per object, one vtable per class**:
 double Bottle_getVolume(const Bottle *me) { return me->vftbl->getVolume(me); }
 ```
 
-`sizeof(Bottle)` is 16 and `sizeof(SizedBottle)` is 24 — byte-identical to what
-C++ emits for the same hierarchy. You cannot do better and still have virtual
+`sizeof(Bottle)` is 16 and `sizeof(SizedBottle)` is 24 on 64-bit targets and
+wasm32 (12 and 20 on 32-bit x86) — byte-identical to what C++ emits for the same
+hierarchy on each. You cannot do better and still have virtual
 dispatch.
 
 Three rules keep it sound, and the compiler enforces all three:

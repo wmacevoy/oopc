@@ -172,9 +172,9 @@ namespace oopc1 {
   /*
     NOT standard-layout: data lives in two classes (Bottle's and this one), so
     [class.mem] says nothing about where the base subobject sits.  This is the
-    same gap cxx::SizedBottle documents, and the same argument closes it: the
-    base is 16 bytes and _maxVolume is 8, so a base at any offset O > 0 would
-    make the object at least O + 24 bytes and fail the assert above.
+    same gap cxx::SizedBottle documents, and the same argument closes it: a
+    base at any offset O > 0 would make the object at least O bytes larger than
+    the base plus _maxVolume, and fail the size assert above.
 
     C is no better off here -- the prefix-cast idiom src/SizedBottle.c relies on
     is only formally blessed for a common initial sequence seen through a union.

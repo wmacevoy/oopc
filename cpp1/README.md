@@ -117,9 +117,9 @@ header publishes and the one the vtable points at must be the same object.
 `oopc1::Bottle` is standard-layout, so `(void*)this == (void*)&_vptr` is
 guaranteed. `oopc1::SizedBottle` holds data in two classes and therefore is not,
 so the standard says nothing about where the base subobject sits — the same gap
-`include/SizedBottle.hpp` already documents, closed the same way: base 16 plus
-`_maxVolume` 8 means a base at any offset `O > 0` would make the object at least
-`O + 24` bytes and fail the `static_assert`.
+`include/SizedBottle.hpp` already documents, closed the same way: a base at any offset `O > 0`
+would make the object `O` bytes larger than the base plus `_maxVolume`, and fail
+the size `static_assert`.
 
 C is no better off. The prefix-cast idiom `src/SizedBottle.c` rests on is only
 formally blessed for a common initial sequence seen through a union. The

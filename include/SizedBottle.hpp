@@ -89,11 +89,12 @@ namespace cxx {
     sits; the Itanium C++ ABI (gcc/clang everywhere) and MSVC both place a lone
     non-virtual base with no virtual functions at offset 0.
 
-    The size assertion below is what actually pins it down.  The base subobject
-    is 16 bytes and extra is 8, so if the base sat at any offset O > 0 the object
-    would be at least O + 24 bytes and the assertion would fail.  Equality at 24
-    forces O == 0 and forces extra to start exactly at 16 -- which is where
-    ::SizedBottle keeps maxVolume.  Note that me() never computes an offset from
+    The size assertion below is what actually pins it down.  Call the base
+    subobject B bytes and extra E, so B + E == sizeof(::SizedBottle) (asserted
+    above).  If the base sat at any offset O > 0 the object would be at least
+    O + B + E bytes and the assertion would fail.  Equality forces O == 0 and
+    forces extra to start exactly at B -- which is where ::SizedBottle keeps
+    maxVolume, on every target.  Note that me() never computes an offset from
     `this`: it downcasts Bottle::me(), so it stays correct regardless.
   */
   static_assert(sizeof(SizedBottle) == sizeof(::SizedBottle),
