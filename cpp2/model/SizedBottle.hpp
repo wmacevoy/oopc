@@ -45,6 +45,7 @@ public:
   {
     if (value < 0) value = 0;
     maxVolume = value;
+    if (volume > value) volume = value;   /* keep volume <= maxVolume */
   }
 
 protected:

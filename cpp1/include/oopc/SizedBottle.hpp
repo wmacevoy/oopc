@@ -148,6 +148,9 @@ namespace oopc1 {
     TRACE("SizedBottle vf setMaxVolume(%p,%lf)\n", (void *)this, value);
     if (value < 0) value = 0;
     _maxVolume = value;
+    /* keep volume <= maxVolume; Bottle's _volume is private, so through its
+       non-virtual implementations, as a derived C class would */
+    if (Bottle::vf_getVolume() > value) Bottle::vf_setVolume(value);
   }
 
   inline double SizedBottle::getMaxVolume() const

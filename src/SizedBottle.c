@@ -35,6 +35,7 @@ extern "C" {
     TRACE("SizedBottle vf setMaxVolume(%p,%lf)\n",(void*)me,value);
     if (value < 0) value = 0;
     me->maxVolume = value;
+    if (me->volume > value) me->volume = value;   /* keep volume <= maxVolume */
   }
 
   void SizedBottle_vf_fini(Bottle *base)
