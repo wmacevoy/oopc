@@ -35,6 +35,14 @@ extern "C" {
   /* Redirect tracing.  Passing 0 restores the default stdout sink. */
   void Trace_to(TraceSink sink);
 
+  /*
+    The one compiler conditional in the core, and it changes no behavior.
+    Trace takes `...`, so C itself cannot check its arguments: Trace("%d", 1.5)
+    compiles and prints garbage.  GCC and Clang (both define __GNUC__) accept a
+    note saying "check this like printf", which turns that mistake into a
+    compile-time warning.  Other compilers do not understand the note, so they
+    get the plain declaration -- same function, same calls, just unchecked.
+  */
 #if defined(__GNUC__)
   void Trace(const char *format, ...) __attribute__((format(printf,1,2)));
 #else
