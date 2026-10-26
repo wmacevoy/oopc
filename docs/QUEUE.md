@@ -18,4 +18,4 @@ Nothing enters without a *done* sentence that can be checked from outside. Only 
 | 10 | `align` in `Type` | REQ2/TY-3 | — | a host allocating from `Type` honours an over-aligned class | range: half a day | blocked: deferred in REQUIREMENTS_v3 | 2026-10-26 |
 | 11 | Type accessors; JS reads `Type` without offsets | REQ2/TY-4 | agent | `js/oopc.mjs` contains no `Type` offset, and the JS suite checks name, parent and size | range: 1 h | review | 2026-10-26 |
 | 12 | `setMaxVolume` lowers the volume, in `src/`, `cpp1/` and `cpp2/` | REQ2/OM-6 | agent | the C, C++, Python and JS suites each check it, and the C suite passes against both inverted models | range: 1 h | review | 2026-10-26 |
-| 13 | 32-bit and raw-wasm CI jobs | REQ2/BLD-1, REQ2/BLD-2 | agent | the `i386` and `wasm-raw` jobs pass on GitHub Actions | range: 1 h | review: not yet run on Actions | 2026-10-26 |
+| 13 | 32-bit and raw-wasm CI jobs | REQ2/BLD-1, REQ2/BLD-2 | agent | the `i386` and `wasm-raw` jobs pass on GitHub Actions | range: 1 h | review | 2026-10-26 |

@@ -7,6 +7,17 @@ Blameless: say what would have found it, not who should have asked
 
 Entries before 2026-10-26 are rebuilt from commit messages; their dates are the commit dates.
 
+## 2026-10-26 — the C++ demo printed `sizeof` as `unsigned long`
+
+- **What happened:** the first run of the new `i386` CI job failed to compile `src/cppmain.cpp`:
+  `printf("%lu", sizeof(...))` assumes `size_t` is `unsigned long`, which is false on 32-bit x86.
+  macOS and 64-bit Linux could never show it.
+- **Kind:** K3 — "builds warning-free" was true only on 64-bit targets.
+- **Cost:** one CI run.
+- **Findable by:** building on a target where the assumption is false (REQ2/BLD-1) — which is how
+  it was found.
+- **Changed:** `%zu`, as `src/cmain.c` already used.
+
 ## 2026-10-26 — the JS suite never tested host-owned memory, though the docs said it did
 
 - **What happened:** CLAUDE.md said "both test suites" exercise a host allocating `Type.size` bytes

@@ -18,10 +18,10 @@ void test(cxx::Bottle &b)
 
 int main()
 {
-  printf("sizeof(Bottle)=%lu\n",sizeof(Bottle));
-  printf("sizeof(cxx::Bottle)=%lu\n",sizeof(cxx::Bottle));
-  printf("sizeof(SizedBottle)=%lu\n",sizeof(SizedBottle));
-  printf("sizeof(cxx::SizedBottle)=%lu\n",sizeof(cxx::SizedBottle));
+  printf("sizeof(Bottle)=%zu\n",sizeof(Bottle));
+  printf("sizeof(cxx::Bottle)=%zu\n",sizeof(cxx::Bottle));
+  printf("sizeof(SizedBottle)=%zu\n",sizeof(SizedBottle));
+  printf("sizeof(cxx::SizedBottle)=%zu\n",sizeof(cxx::SizedBottle));
 
   {
     cxx::Bottle b;
