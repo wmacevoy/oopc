@@ -1,4 +1,4 @@
-["_Type_of","_Type_isa","_Type_cast",
+["_Type_of","_Type_isa","_Type_cast","_Type_name","_Type_parent","_Type_size",
  "_Bottle_new","_Bottle_delete","_Bottle_init","_Bottle_fini",
  "_Bottle_getVolume","_Bottle_setVolume","_Bottle_cast","_Bottle_getType",
  "_SizedBottle_new","_SizedBottle_delete","_SizedBottle_init","_SizedBottle_fini",

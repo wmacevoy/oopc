@@ -40,6 +40,15 @@ extern "C" {
   void *Type_cast(void *object, const Type *base);
   const void *Type_castConst(const void *object, const Type *base);
 
+  /*
+    The fields again, as functions.  C reads the struct directly; a host calls
+    these instead, so it never needs to know the struct's layout -- which
+    differs between 32- and 64-bit targets.
+  */
+  const char *Type_name(const Type *type);
+  const Type *Type_parent(const Type *type);
+  size_t Type_size(const Type *type);
+
 #ifdef __cplusplus
 }
 #endif
