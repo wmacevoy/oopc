@@ -33,6 +33,12 @@ tmp/SizedBottle.o : src/SizedBottle.c include/SizedBottle.h include/Bottle.h inc
 tmp/cmain.o : src/cmain.c include/Bottle.h include/SizedBottle.h include/Type.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+tmp/test_oopc.o : src/test_oopc.c include/Bottle.h include/SizedBottle.h include/Type.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+tmp/test_oopc_cpp.o : src/test_oopc.cpp include/Bottle.hpp include/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 tmp/cppmain.o : src/cppmain.cpp include/Bottle.hpp include/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -40,6 +46,12 @@ bin/cbottle : tmp/cmain.o $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 bin/cppbottle : tmp/cppmain.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+bin/test_c : tmp/test_oopc.o $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+bin/test_cpp : tmp/test_oopc_cpp.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # Shared library -- this is the entire Python binding's dependency.  There is no
@@ -61,11 +73,16 @@ clean :
 test : test-c test-cpp test-python
 	@echo "All tests: PASS"
 
-test-c : bin/cbottle
-	./bin/cbottle > /dev/null && echo "C test: PASS"
+# The demos only show the mechanism; the test_* programs check it.
+test-c : bin/cbottle bin/test_c
+	./bin/cbottle > /dev/null
+	./bin/test_c > tmp/test_c.out || { cat tmp/test_c.out; exit 1; }
+	@echo "C test: PASS"
 
-test-cpp : bin/cppbottle
-	./bin/cppbottle > /dev/null && echo "C++ test: PASS"
+test-cpp : bin/cppbottle bin/test_cpp
+	./bin/cppbottle > /dev/null
+	./bin/test_cpp > tmp/test_cpp.out || { cat tmp/test_cpp.out; exit 1; }
+	@echo "C++ test: PASS"
 
 test-python : $(SHLIB)
 	$(PYTHON) python/test_oopc.py && echo "Python test: PASS"
@@ -133,12 +150,17 @@ bin/cpp1bottle : tmp/cpp1main.o $(CPP1_OBJS)
 bin/cbottle1 : tmp/cmain.o $(CPP1_OBJS)
 	$(CXX) $(CXX17FLAGS) -o $@ $^
 
+bin/test_c1 : tmp/test_oopc.o $(CPP1_OBJS)
+	$(CXX) $(CXX17FLAGS) -o $@ $^
+
 $(SHLIB1) : $(CPP1_OBJS)
 	$(CXX) $(CXX17FLAGS) $(SHARED_FLAG) -o $@ $^
 
-cpp1 : bin/cpp1bottle bin/cbottle1 $(SHLIB1)
+cpp1 : bin/cpp1bottle bin/cbottle1 bin/test_c1 $(SHLIB1)
 
-test-cpp1 : bin/cbottle bin/cbottle1 bin/cpp1bottle $(SHLIB1)
+test-cpp1 : bin/cbottle bin/cbottle1 bin/cpp1bottle bin/test_c1 $(SHLIB1)
+	@./bin/test_c1 > tmp/test_c1.out || { cat tmp/test_c1.out; exit 1; }
+	@echo "cpp1: unmodified C suite: PASS"
 	@./bin/cbottle > tmp/c.out && ./bin/cbottle1 > tmp/c1.out
 	@diff tmp/c.out tmp/c1.out && echo "cpp1: the C demo is byte-identical against the C++ build"
 	@./bin/cpp1bottle > /dev/null && echo "cpp1: native C++ demo: PASS"
@@ -181,6 +203,12 @@ tmp/cpp2_cmain.o : src/cmain.c $(CPP2_GEN)
 bin/cbottle2 : tmp/cpp2_cmain.o $(CPP2_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
+tmp/cpp2_test_oopc.o : src/test_oopc.c $(CPP2_GEN)
+	$(CC) $(CFLAGS) -Icpp2/gen -c -o $@ $<
+
+bin/test_c2 : tmp/cpp2_test_oopc.o $(CPP2_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
 # The model is built WITHOUT -Iinclude: cpp2/src/cpp2main.cpp includes
 # "SizedBottle.hpp", and include/SizedBottle.hpp is the cxx:: wrapper for the C
 # library -- a different thing with the same basename.
@@ -190,9 +218,11 @@ bin/cpp2bottle : cpp2/src/cpp2main.cpp $(CPP2_MODEL)
 $(SHLIB2) : $(CPP2_OBJS)
 	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^
 
-cpp2 : bin/cbottle2 bin/cpp2bottle $(SHLIB2)
+cpp2 : bin/cbottle2 bin/cpp2bottle bin/test_c2 $(SHLIB2)
 
-test-cpp2 : bin/cbottle bin/cbottle2 bin/cpp2bottle $(SHLIB2)
+test-cpp2 : bin/cbottle bin/cbottle2 bin/cpp2bottle bin/test_c2 $(SHLIB2)
+	@./bin/test_c2 > tmp/test_c2.out || { cat tmp/test_c2.out; exit 1; }
+	@echo "cpp2: unmodified C suite: PASS"
 	@$(PYTHON) cpp2/test_oopcc.py > /dev/null && echo "cpp2: generator subset tests: PASS"
 	@./bin/cbottle > tmp/c.out && ./bin/cbottle2 > tmp/c2.out
 	@diff tmp/c.out tmp/c2.out && echo "cpp2: the C demo is byte-identical against the generated C"

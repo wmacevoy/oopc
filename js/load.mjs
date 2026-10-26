@@ -55,7 +55,8 @@ export async function loadRaw(path) {
   const instance = await WebAssembly.instantiate(compiled, imports);
   memory = instance.exports.memory;
   brk = instance.exports.__heap_base?.value ?? 0x10000;
-  return instance;
+  /* Emscripten exports _malloc/_free; here they are ours, so say so. */
+  return Object.assign(instance, { malloc, free });
 }
 
 /**
