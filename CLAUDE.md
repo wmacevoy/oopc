@@ -83,6 +83,48 @@ The rules, enforced by `static_assert` on size and alignment in each header:
 
 Adding a class means: `include/X.h` (vtable slots + declarations mirroring the base prefix), `src/X.c` (static impls, vtable wiring, dispatchers), `include/X.hpp` (the five rules above). All hand-written; nothing is generated.
 
+### The inverted models (`cpp1/`, `cpp2/`)
+
+Two experiments that run the repository backwards: **C++ is the source and the C
+ABI is the artifact**. Both emit the *same* symbols as `src/*.c`, so nothing
+downstream changes — `bin/cbottle1` and `bin/cbottle2` are the unmodified
+`src/cmain.c` linked against them, and `python/oopc.py` runs against
+`bin/liboopc1` / `bin/liboopc2` through the `OOPC_LIB` environment override.
+Each has its own README; read those before changing either.
+
+The point of both: the four invariants listed above under *The C object model*
+— mirrored vtable slots, mirrored struct fields, the hand-written downcast in
+every override, and the `Bottle_fini`/`Bottle_vf_fini` recursion footgun — are
+maintained by the compiler (`cpp1/`) or by the generator (`cpp2/`) instead of by
+a human.
+
+- **`cpp1/`** — header-only, C++17. `oopc::Slot` generates the slot thunks
+  (a checked `static_cast` where the C writes `(SizedBottle*)base`),
+  `oopc::Destroy` makes the fini slot call the most-derived destructor so C++
+  chains automatically, and `oopc::Export` makes each `extern "C"` entry point
+  one expression. **No `virtual` keyword anywhere**, deliberately: the vtable is
+  authored so its layout is ours, `constexpr`, and readable from C. The object
+  struct is *inherited* (compiler-computed casts); the vtable struct is *nested*
+  (standard-layout, so the prefix is guaranteed rather than ABI-dependent), and
+  a derived table is built by copying the base's and patching the overrides.
+  Class constants live in `oopc::Class<C>` specializations *after* the class
+  body, so constructors must be defined out of line.
+  Deliberate ABI delta: `Bottle_vftbl`/`SizedBottle_vftbl` are not exported.
+
+- **`cpp2/`** — `cpp2/oopcc.py`, a libclang generator. `cpp2/model/*.hpp` is
+  ordinary polymorphic C++ (real `virtual`) that knows nothing about oopc;
+  the generator emits `cpp2/gen/*.{h,c}` in the exact shape of `src/Bottle.c`.
+  It refuses anything outside the flattenable subset rather than emitting C that
+  quietly means something else — `cpp2/test_oopcc.py` has 12 refusal cases and
+  4 acceptance cases, and every new subset rule needs a refusal test with it.
+  Body translation is cursor-based, not textual; the qualified/unqualified call
+  distinction is what decides `Base_vf_f` versus the dispatcher.
+
+`make cpp1 cpp2 test-inverted`. `CXX17FLAGS` is separate from `CXXFLAGS` because
+the `cxx::` wrapper stays at C++11. `bin/cpp2bottle` is built *without*
+`-Iinclude`, since `include/SizedBottle.hpp` and `cpp2/model/SizedBottle.hpp`
+share a basename and are different things.
+
 ### Runtime types (`include/Type.h`)
 
 `Type { name, parent, size }` — three words per class, zero per object. Objects carry no type tag; they reach their `Type` through the vtable's first slot, so `Type_of` is one double indirection. `Type_isa` walks the parent chain; `Class_cast` is the checked downcast that makes the foreign bindings safe.
@@ -113,5 +155,12 @@ Neither binding has per-class C code. Adding a class means adding a C class and 
 
 - `make wasm-raw` hardcodes a Homebrew default for `WASI_SYSROOT`; override it elsewhere.
 - The wasm path is exercised in CI only. Locally, only `wasm-raw` builds without an Emscripten install.
+- `Type` carries `size` but not `align`, so a host allocating from `Type::size`
+  cannot honor an over-aligned class. Adding a field changes the shared `Type`
+  layout, which `js/oopc.mjs` reads by offset.
+- Neither inverted model handles exceptions. Any real use needs `noexcept` or
+  catch-and-translate at every entry point, plus an error channel the C ABI does
+  not have. This is the largest single tax on the inversion.
+- `cpp1/` and `cpp2/` are not yet in CI (`.github/workflows/build-test.yml`).
 
 The tree builds warning-free under `-Wall -Wextra -Wpedantic`; CI enforces it with `-Werror`.
