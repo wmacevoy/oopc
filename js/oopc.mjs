@@ -35,15 +35,14 @@ export function bind(module) {
     return decoder.decode(u8.subarray(ptr, end));
   }
 
-  /* struct TypeStruct on wasm32: char* name; Type* parent; size_t size. */
+  /* Through accessors, not offsets: the struct's layout is C's business. */
   function readType(ptr) {
     if (!ptr) return null;
-    const dv = new DataView(buffer());
     return {
       address: ptr,
-      name: cstring(dv.getUint32(ptr, true)),
-      parent: dv.getUint32(ptr + 4, true),
-      size: dv.getUint32(ptr + 8, true),
+      name: cstring(fn("Type_name")(ptr)),
+      parent: fn("Type_parent")(ptr),
+      size: fn("Type_size")(ptr),
     };
   }
 

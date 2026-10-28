@@ -34,8 +34,9 @@ Dispatch is **one vtable pointer per object, one vtable per class**:
 double Bottle_getVolume(const Bottle *me) { return me->vftbl->getVolume(me); }
 ```
 
-`sizeof(Bottle)` is 16 and `sizeof(SizedBottle)` is 24 — byte-identical to what
-C++ emits for the same hierarchy. You cannot do better and still have virtual
+`sizeof(Bottle)` is 16 and `sizeof(SizedBottle)` is 24 on 64-bit targets and
+wasm32 (12 and 20 on 32-bit x86) — byte-identical to what C++ emits for the same
+hierarchy on each. You cannot do better and still have virtual
 dispatch.
 
 Three rules keep it sound, and the compiler enforces all three:
@@ -100,6 +101,47 @@ Polymorphism goes through `cxx::Bottle &` and is resolved by the C vtable. See
 the header comments in `include/SizedBottle.hpp` for the five rules a new
 derived wrapper must follow.
 
+## Running it backwards: C++ as the source
+
+Everything above runs one way — C is the source of truth, and every other
+language binds to the ABI it publishes. Two directories run it the other way,
+because the question is worth asking: *if you restrict yourself to single
+inheritance, polymorphic C++, can it be flattened to this same C?*
+
+It can. The subset is not merely mappable, it is isomorphic:
+
+| C++ | oopc | checked today by | checked inverted by |
+|---|---|---|---|
+| `struct D : B` | prefix layout of `DStruct` | nobody (a comment) | the compiler |
+| vtable slot order | `DVftbl` restates `BVftbl` first | nobody (a comment) | the compiler |
+| an override | assign a function pointer into a slot | nobody | the compiler |
+| the downcast in an override | `(D*)base` | nobody | `static_cast` |
+| `Super::f()` | `B_vf_f(me)` — never `B_f(me)` | nobody (recurses forever) | not expressible |
+| `typeid` / `dynamic_cast` | `Type` + `Type_isa` | — | `using Super` |
+| `new (p) D()` / `p->~D()` | `D_init(p)` / `D_fini(p)` | — | the same |
+
+Two implementations of that idea, each producing the **same C ABI**, each
+verified by linking the unmodified `src/cmain.c` against it and by running
+`python/oopc.py` unchanged over it:
+
+| | source | mechanism | build step | `virtual` keyword |
+|---|---|---|---|---|
+| [`cpp1/`](cpp1/README.md) | C++ headers | templates emit the ABI at compile time | none | no — the vtable is authored, so its layout is ours |
+| [`cpp2/`](cpp2/README.md) | ordinary C++ | libclang reads it, writes the C | libclang | yes — the C++ is read, never linked |
+
+```bash
+make cpp1 cpp2 test-inverted
+```
+
+`cpp1/` is the one to reach for: no toolchain dependency, no generated code to
+debug, and every invariant checked by the compiler that is already running.
+`cpp2/` is the one to *read*: it emits C you can put side by side with
+`src/SizedBottle.c` and see is the same file.
+
+Neither replaces `src/*.c`. For teaching, the hand-written C is the artifact
+that shows the mechanism; the inverted models show what it costs to stop
+maintaining it by hand.
+
 ## Tracing
 
 `TRACE(...)` is off unless you build with `-DDEBUG`, and even when off it still
@@ -119,6 +161,10 @@ the kernel's terminal rather than the cell.
 make all            # bin/cbottle, bin/cppbottle, bin/liboopc.<dylib|so>
 make test           # C, C++ and Python
 make CFLAGS="-g -Iinclude -fPIC -DDEBUG" all    # with tracing
+
+make cpp1 test-cpp1     # C++ as the source, header-only  (needs C++17)
+make cpp2 test-cpp2     # C++ as the source, generated C   (needs libclang)
+make test-inverted      # both
 ```
 
 WebAssembly needs Emscripten, which CI installs — see

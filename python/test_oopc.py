@@ -23,23 +23,27 @@ sb.set_max_volume(10)
 # override is selected by the C vtable rather than by Python.
 b.set_volume(100)
 sb.set_volume(100)
-check("Bottle.set_volume(100) -> volume", b.get_volume(), 100.0)
-check("SizedBottle.set_volume(100) -> volume", sb.get_volume(), 10.0)
-check("inherited method reached the override",
+check("REQ2/BND-1 Bottle.set_volume(100) -> volume", b.get_volume(), 100.0)
+check("REQ2/BND-1 SizedBottle.set_volume(100) -> volume", sb.get_volume(), 10.0)
+check("REQ2/BND-1 inherited method reached the override",
       type(sb).get_volume is type(b).get_volume, True)
 
+sb.set_volume(8)
+sb.set_max_volume(3)
+check("REQ2/OM-6 lowering the max lowers the volume", sb.get_volume(), 3.0)
+
 print("\nruntime types")
-check("Bottle.c_type().name", oopc.Bottle.c_type().name, b"Bottle")
-check("SizedBottle.c_type().name", oopc.SizedBottle.c_type().name, b"SizedBottle")
-check("SizedBottle parent", oopc.SizedBottle.c_type().parent.contents.name, b"Bottle")
-check("Bottle is a root", bool(oopc.Bottle.c_type().parent), False)
-check("dynamic type of sb", sb.type_name, "SizedBottle")
+check("REQ2/TY-1 Bottle.c_type().name", oopc.Bottle.c_type().name, b"Bottle")
+check("REQ2/TY-1 SizedBottle.c_type().name", oopc.SizedBottle.c_type().name, b"SizedBottle")
+check("REQ2/TY-1 SizedBottle parent", oopc.SizedBottle.c_type().parent.contents.name, b"Bottle")
+check("REQ2/TY-1 Bottle is a root", bool(oopc.Bottle.c_type().parent), False)
+check("REQ2/TY-1 dynamic type of sb", sb.type_name, "SizedBottle")
 
 print("\nchecked downcasts")
-check("SizedBottle.cast(plain Bottle)", oopc.SizedBottle.cast(b), None)
-check("SizedBottle.cast(SizedBottle) is not None",
+check("REQ2/BND-2 SizedBottle.cast(plain Bottle)", oopc.SizedBottle.cast(b), None)
+check("REQ2/BND-2 SizedBottle.cast(SizedBottle) is not None",
       oopc.SizedBottle.cast(sb) is not None, True)
-check("Bottle.cast(SizedBottle) is not None",
+check("REQ2/BND-2 Bottle.cast(SizedBottle) is not None",
       oopc.Bottle.cast(sb) is not None, True)
 
 print("\nhost-owned memory (why Type carries size)")
@@ -51,9 +55,9 @@ oopc._lib.SizedBottle_init(ctypes.addressof(buf))
 view = oopc.SizedBottle(ctypes.addressof(buf), owned=False)
 view.set_max_volume(3)
 view.set_volume(99)
-check("SizedBottle.c_type().size", size, 24)
-check("clamped in Python-owned memory", view.get_volume(), 3.0)
-check("still reports its type", view.type_name, "SizedBottle")
+check("REQ2/BND-2 SizedBottle.c_type().size", size, 24)
+check("REQ2/BND-2 clamped in Python-owned memory", view.get_volume(), 3.0)
+check("REQ2/BND-2 still reports its type", view.type_name, "SizedBottle")
 oopc._lib.SizedBottle_fini(ctypes.addressof(buf))
 
 print("\ncontext manager")

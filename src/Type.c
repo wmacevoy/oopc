@@ -36,6 +36,10 @@ extern "C" {
     return Type_isa(Type_of(object), base) ? object : 0;
   }
 
+  const char *Type_name(const Type *type) { return type->name; }
+  const Type *Type_parent(const Type *type) { return type->parent; }
+  size_t Type_size(const Type *type) { return type->size; }
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
