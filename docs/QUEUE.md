@@ -1,7 +1,7 @@
 # Queue
 
 What is being worked, in what order, by whom, and what would make it done. The shared cursor
-([SE1/W10](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/08-work.md#w10)).
+([SE1/W10](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/08-work.md#w10)).
 Nothing enters without a *done* sentence that can be checked from outside. Only a human sets *done*.
 
 | # | Item | Versioned requirement IDs (or *chore*) | Owner | Done when | Estimate | Status | Since |

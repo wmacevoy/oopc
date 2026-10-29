@@ -1,9 +1,9 @@
 # Findings
 
 What we learned the expensive way: surprises, dead ends, measurements. The only document reality
-writes ([SE1/W10](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/08-work.md#w10)).
+writes ([SE1/W10](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/08-work.md#w10)).
 Blameless: say what would have found it, not who should have asked
-([SE1/H12](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/09-people.md#h12)).
+([SE1/H12](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/09-people.md#h12)).
 
 Entries before 2026-10-26 are rebuilt from commit messages; their dates are the commit dates.
 
@@ -24,7 +24,7 @@ Entries before 2026-10-26 are rebuilt from commit messages; their dates are the 
   and calling `init`/`fini`. Only the Python suite did. The JS binding read `Type` at offsets that
   hold only on wasm32, which no test would have caught on another target either.
 - **Kind:** K3 — a claim nobody had checked against the file.
-- **Cost:** none; found while writing REQUIREMENTS_v2 (BND-2, TY-4).
+- **Cost:** none; found while writing REQUIREMENTS_v2 (REQ2/BND-2, REQ2/TY-4).
 - **Findable by:** naming the requirement in every check — a requirement no label names is untested.
 - **Changed:** `js/test_oopc.mjs` tests it; `js/oopc.mjs` reads `Type` through accessors.
 
@@ -47,7 +47,7 @@ Entries before 2026-10-26 are rebuilt from commit messages; their dates are the 
 - **Kind:** K3 — "All tests: PASS" read as covering C and C++ behaviour, and did not.
 - **Cost:** none yet; found while adopting the guide.
 - **Findable by:** breaking the code on purpose and watching each suite
-  ([SE1/T3](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/06-testing.md#t3)).
+  ([SE1/T3](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/06-testing.md#t3)).
 - **Changed:** `src/test_oopc.c` and `src/test_oopc.cpp` assert values; each was seen to fail with
   the clamp removed, and again with the `setMaxVolume` re-clamp removed (QUEUE #1).
 
@@ -58,7 +58,7 @@ Entries before 2026-10-26 are rebuilt from commit messages; their dates are the 
 - **Kind:** K2.
 - **Cost:** a red CI job on `macos-latest`.
 - **Findable by:** CI on every platform shipped
-  ([SE1/O3](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/07-operating.md#o3)) —
+  ([SE1/O3](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/07-operating.md#o3)) —
   which is how it was found.
 - **Changed:** `68bdfcb`; the Python suite now also runs against the instrumented library.
 

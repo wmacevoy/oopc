@@ -3,11 +3,11 @@
 How the requirements in [REQUIREMENTS_v3](REQUIREMENTS_v3.md) are met, and what was rejected. The
 mechanism itself — layout rules, the five wrapper rules, the fini footgun — is in
 [`CLAUDE.md`](../CLAUDE.md#architecture), which stays the one place it is written
-([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/05-design.md#d6)). This
+([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/05-design.md#d6)). This
 file records structure and *why*.
 
 Rebuilt from the code and history on 2026-10-26
-([SE1/W12](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/08-work.md#w12)).
+([SE1/W12](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/08-work.md#w12)).
 Reasons cite the commit that stated them; reasons with no source are marked *(inferred)*.
 
 ## Components and the dependency rule
@@ -51,7 +51,7 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
 
 - **The exported C ABI** — symbol names and `Type`'s layout. Every binding, both inverted models, and
   the released artifacts depend on it
-  ([SE1/D11](https://github.com/wmacevoy/software-engineering/blob/v1.1/guide/05-design.md#d11)).
+  ([SE1/D11](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/05-design.md#d11)).
   Reviewed by: _nobody recorded_.
 
 ## Decisions
