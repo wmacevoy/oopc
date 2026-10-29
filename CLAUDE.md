@@ -2,12 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.1).
+This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.3).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
 wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v3`](docs/REQUIREMENTS_v3.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
-[`FINDINGS`](docs/FINDINGS.md).
+[`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
+
+@AGENTS.md
 
 ## What this project is
 
@@ -31,6 +33,8 @@ make all          # bin/cbottle, bin/cppbottle, bin/liboopc.<dylib|so>
 make test         # C, C++, Python  (test-c / test-cpp / test-python individually)
 make clean
 ```
+
+**The full check:** `make test` — the same one CI runs; success prints `All tests: PASS`.
 
 Every language has an assertion-based suite named `test_oopc` (`src/test_oopc.c`, `src/test_oopc.cpp`, `python/test_oopc.py`, `js/test_oopc.mjs`), and every check's label names the requirement it checks (`REQ2/OM-6`). `bin/cbottle` and `bin/cppbottle` are demos, run only to see they don't crash. A new check should be seen failing once before you trust it (SE1/T3). When you break and restore a file to do that, `make clean` afterwards: make's one-second timestamps can leave a stale object that still holds the break.
 
@@ -162,9 +166,8 @@ Neither binding has per-class C code. Adding a class means adding a C class and 
 
 ## Known issues
 
-Tracked in [`docs/QUEUE.md`](docs/QUEUE.md). The one to know before trusting a green run:
-`make test-c` and `make test-cpp` pass whenever the demos exit 0 — they assert no values, so only the
-Python and JS suites catch a wrong answer (QUEUE #1). The wasm path is exercised in CI only; locally,
-only `wasm-raw` builds without an Emscripten install.
+Tracked in [`docs/QUEUE.md`](docs/QUEUE.md). The one to know before trusting a green run: CI does
+not build `cpp1/` or `cpp2/` (QUEUE #4), so `make test-inverted` is yours to run. The wasm path is
+exercised in CI only; locally, only `wasm-raw` builds without an Emscripten install.
 
 The tree builds warning-free under `-Wall -Wextra -Wpedantic`; CI enforces it with `-Werror`.
