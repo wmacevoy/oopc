@@ -2,14 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.3).
+This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.7).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
-wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v3`](docs/REQUIREMENTS_v3.md)
+wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v4`](docs/REQUIREMENTS_v4.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
 [`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
 
 @AGENTS.md
+@vendor/se1/QUICKREF.md
 
 ## What this project is
 
@@ -131,7 +132,7 @@ a human.
   Body translation is cursor-based, not textual; the qualified/unqualified call
   distinction is what decides `Base_vf_f` versus the dispatcher.
 
-`make cpp1 cpp2 test-inverted`. `CXX17FLAGS` is separate from `CXXFLAGS` because
+`pixi run make cpp1 cpp2 test-inverted` (pixi supplies libclang; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
 the `cxx::` wrapper stays at C++11. `bin/cpp2bottle` is built *without*
 `-Iinclude`, since `include/SizedBottle.hpp` and `cpp2/model/SizedBottle.hpp`
 share a basename and are different things.
@@ -162,12 +163,12 @@ Neither binding has per-class C code. Adding a class means adding a C class and 
 
 ## CI
 
-`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; and a release job on `v*` tags. Artifacts upload per platform.
+`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp1/` and `cpp2/` through pixi on Linux and macOS at Python 3.9 and the newest; and a release job on `v*` tags. Artifacts upload per platform.
 
 ## Known issues
 
-Tracked in [`docs/QUEUE.md`](docs/QUEUE.md). The one to know before trusting a green run: CI does
-not build `cpp1/` or `cpp2/` (QUEUE #4), so `make test-inverted` is yours to run. The wasm path is
+Tracked in [`docs/QUEUE.md`](docs/QUEUE.md). The one to know before trusting a green run: the C++ side of
+`cpp2/` is only checked for exiting 0 (QUEUE #15), so its `PASS` cannot say the model and the generated C disagree. The wasm path is
 exercised in CI only; locally, only `wasm-raw` builds without an Emscripten install.
 
 The tree builds warning-free under `-Wall -Wextra -Wpedantic`; CI enforces it with `-Werror`.
