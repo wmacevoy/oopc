@@ -7,6 +7,17 @@ Blameless: say what would have found it, not who should have asked
 
 Entries before 2026-10-26 are rebuilt from commit messages; their dates are the commit dates.
 
+## Verdicts
+
+One line each, by the named judge of a *(judged)* requirement (SE1/W11).
+
+- REQ4/MISSION-1 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-1 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ5/SHAPE-2 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-3 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-4 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-5 verdict: pass by Warren MacEvoy, 2026-11-09
+
 ## 2026-11-09 — the generator accepted C++ it then mistranslated
 
 - **What happened:** run against a real adopter's headers and against that code's style, `cpp2/oopcc.py`
