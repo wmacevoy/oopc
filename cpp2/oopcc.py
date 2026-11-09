@@ -225,6 +225,10 @@ def read_class(cursor, path):
 
         elif c.kind == CK.FIELD_DECL:
             check_type(c.type.spelling, c, "field '%s'" % c.spelling)
+            if any(x.kind.is_expression() for x in c.get_children()):
+                raise Unsupported(
+                    "%s: field '%s' has a default initializer, which would be lost: "
+                    "assign it in the constructor body." % (where(c), c.spelling))
             k.fields.append((c.type.spelling, c.spelling))
 
         elif c.kind == CK.CONSTRUCTOR:
@@ -240,6 +244,10 @@ def read_class(cursor, path):
                     % where(c))
             if k.ctor is not None:
                 raise Unsupported("%s: more than one constructor." % where(c))
+            if any(x.kind != CK.COMPOUND_STMT for x in c.get_children()):
+                raise Unsupported(
+                    "%s: %s has a constructor initializer list, which would be lost: "
+                    "assign in the constructor body." % (where(c), k.name))
             k.ctor = c
 
         elif c.kind == CK.DESTRUCTOR:
@@ -259,6 +267,10 @@ def read_class(cursor, path):
                     "non-virtual method has no slot, so a host language calling "
                     "through the C ABI could not reach the right one."
                     % (where(c), k.name, c.spelling))
+            if c.is_pure_virtual_method():
+                raise Unsupported(
+                    "%s: %s::%s is pure virtual.  It has no body to become a slot, "
+                    "and C has no abstract class." % (where(c), k.name, c.spelling))
             if c.spelling in seen:
                 raise Unsupported(
                     "%s: %s::%s is overloaded.  C has one name per function; "
@@ -267,6 +279,10 @@ def read_class(cursor, path):
             seen.add(c.spelling)
             check_type(c.result_type.spelling, c, "return of '%s'" % c.spelling)
             for a in c.get_arguments():
+                if any(x.kind.is_expression() for x in a.get_children()):
+                    raise Unsupported(
+                        "%s: parameter '%s' has a default argument, which C cannot "
+                        "express." % (where(a), a.spelling))
                 target = object_param(a)
                 if target:
                     k.object_params.add(target)
@@ -687,12 +703,21 @@ def main():
                 print("oopcc: %s" % d, file=sys.stderr)
             return 1
         for c in tu.cursor.get_children():
+            if (c.kind == CK.NAMESPACE and c.location.file
+                    and os.path.abspath(c.location.file.name) == os.path.abspath(path)):
+                raise Unsupported(
+                    "%s: a namespace in a model would hide its classes from the "
+                    "generator: declare them at file scope." % where(c))
             if (c.kind == CK.CLASS_DECL and c.is_definition()
                     and c.location.file
                     and os.path.abspath(c.location.file.name) == os.path.abspath(path)):
                 k = read_class(c, path)
                 classes[k.name] = k
                 order.append((k, path))
+
+    if not order:
+        raise Unsupported("no model class in the sources: only a `class` at file "
+                          "scope is flattened, and `struct` is left alone.")
 
     for k, _ in order:
         if k.base_name:

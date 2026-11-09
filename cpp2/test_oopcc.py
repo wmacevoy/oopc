@@ -338,6 +338,30 @@ refuses("call through something other than a parameter", MODEL + """
 class B { public: B() {} virtual ~B() {} virtual int use(A *a) { return (a + 0)->get(); } };
 """, "parameter->method")
 
+refuses("default member initializer would be lost", """
+class A { public: A() {} virtual ~A() {} virtual double g() const { return x; } double x = 3.5; };
+""", "default initializer")
+
+refuses("constructor initializer list would be lost", """
+class A { public: A() : x(7) {} virtual ~A() {} virtual double g() const { return x; } protected: double x; };
+""", "initializer list")
+
+refuses("pure virtual method has no body", """
+class A { public: A() {} virtual ~A() {} virtual double f() const = 0; };
+""", "pure virtual")
+
+refuses("default argument", """
+class A { public: A() { x = 0; } virtual ~A() {} virtual void s(double v = 2.0) { x = v; } protected: double x; };
+""", "default argument")
+
+refuses("class in a namespace", """
+namespace t { class A { public: A() {} virtual ~A() {} virtual int g() const { return 1; } }; }
+""", "namespace")
+
+refuses("no model class at all", """
+struct P { int v; };
+""", "no model class")
+
 refuses("member template", """
 class A { public: A() {} virtual ~A() {} virtual int get() const { return x; }
   template <class T> void put(T t) { x = (int)t; }

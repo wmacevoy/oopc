@@ -71,6 +71,10 @@ means something else. Every rule below is exercised by `cpp2/test_oopcc.py`.
 | a pointer to a class not among the sources, or to a `struct` | the C side has no such oopc type to name |
 | a call through another object that is not `parameter->method(...)`, unqualified | only that form has a receiver the generator can state exactly |
 | a member template | only instantiations could cross, and C cannot name one |
+| a default member initializer or constructor initializer list | the generator reads the constructor body only, so it would be lost; assign in the body |
+| a pure virtual method | it has no body to become a slot, and C has no abstract class |
+| a default argument | C has no default arguments |
+| a namespace, or sources with no `class` at file scope | the generator would have nothing to flatten and would report success |
 
 **Pointer parameters.** A parameter may be `C *` or `const C *` where `C` is a model class among the
 sources. It is borrowed: the callee may use it during the call and cannot keep it, and the caller
