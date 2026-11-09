@@ -366,8 +366,15 @@ class Body:
         if body is None:
             return ""
         self.edits = []
+        prev_line = body.extent.start.line
         for c in body.get_children():
             self.walk(c)
+            # One statement per line: kept on one line, `if (x) y; z;` is
+            # rejected by GCC's -Wmisleading-indentation.
+            if c.extent.start.line == prev_line:
+                at = c.extent.start.offset
+                self.edits.append((at, at, "\n"))
+            prev_line = c.extent.end.line
 
         e = body.extent
         start, end = e.start.offset, e.end.offset
@@ -605,8 +612,11 @@ def main():
     sysroot = []
     if sys.platform == "darwin":
         sysroot += probe(["xcrun", "--show-sdk-path"], "-isysroot")
-    sysroot += probe([os.environ.get("CC", "cc"), "-print-resource-dir"],
+    resource = probe([os.environ.get("CC", "cc"), "-print-resource-dir"],
                      "-resource-dir")
+    # GCC has no resource directory; its builtin headers are found this way.
+    sysroot += resource or probe([os.environ.get("CC", "cc"), "-print-file-name=include"],
+                                 "-isystem")
     os.makedirs(args.out, exist_ok=True)
 
     classes = {}
