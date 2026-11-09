@@ -109,8 +109,9 @@ These apply when C++ is the source and the C ABI is the gateway to other languag
 The [generator](../cpp2/README.md#the-subset) refuses input outside its subset, which enforces 6 and 8
 and refuses overloads (part of 7). Three things differ from the guidelines above:
 
-- **Stricter than guideline 1.** It refuses every class-typed parameter, including pointers to oopc
-  objects (QUEUE #17).
+- **Guideline 1 and 2, for parameters only.** It accepts `C *` and `const C *` for a model class, as a
+  borrowed pointer, and refuses an object pointer as a field or a return. Handing an object over has
+  no rule yet.
 - **Looser than guideline 3.** It accepts `long` and `size_t`, so avoiding them is up to you. Its list
   of accepted types does not include `int32_t`.
 - **Silent on 5 and 10.** Nothing checks for a throwing entry point or a reordered ABI.

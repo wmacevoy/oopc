@@ -127,8 +127,8 @@ a human.
   ordinary polymorphic C++ (real `virtual`) that knows nothing about oopc;
   the generator emits `cpp2/gen/*.{h,c}` in the exact shape of `src/Bottle.c`.
   It refuses anything outside the flattenable subset rather than emitting C that
-  quietly means something else — `cpp2/test_oopcc.py` has 12 refusal cases and
-  5 acceptance cases, and every new subset rule needs a refusal test with it.
+  quietly means something else — `cpp2/test_oopcc.py` has 21 refusal cases and
+  6 acceptance cases, and every new subset rule needs a refusal test with it.
   `cpp2/src/checks.inc` is compiled against both the model and the generated C (REQ4/INV-3), so a check added there holds both sides.
   Body translation is cursor-based, not textual; the qualified/unqualified call
   distinction is what decides `Base_vf_f` versus the dispatcher.

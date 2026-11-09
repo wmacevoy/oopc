@@ -246,6 +246,98 @@ class A { public: A() {} virtual ~A() {} virtual void take(int &v) { x = v; }
 protected: int x; };
 """, "cannot be flattened")
 
+CALLER = """
+#include <stdio.h>
+class A {
+public:
+  A() { x = 1; }
+  virtual ~A() {}
+  virtual int get() const { return x; }
+  virtual int sum(A *other) { return x + other->x + other->get(); }
+protected:
+  int x;
+};
+class B : public A {
+public:
+  B() { x = 10; }
+  virtual ~B() {}
+  virtual int get() const { return 100; }
+};
+class C {
+public:
+  C() { n = 0; }
+  virtual ~C() {}
+  virtual void take(const A *a) { n = a->get(); }
+  virtual int held() const { return n; }
+protected:
+  int n;
+};
+"""
+
+accepts("REQ1/INV-2 borrowed pointer: field, override, const", CALLER, main="""
+#include <stdio.h>
+#include "B.h"
+#include "C.h"
+int main(void) {
+  A *a = A_new(); B *b = B_new(); C *c = C_new();
+  C_take(c, (A *)b);
+  printf("%d %d %d\\n", A_sum(a, (A *)b), A_sum(a, a), C_held(c));
+  A_delete((A *)a); A_delete((A *)b); C_delete(c);
+  return 0;
+}
+""", cxx_main="""
+#include <stdio.h>
+#include "T.hpp"
+int main() {
+  A *a = new A; B *b = new B; C *c = new C;
+  c->take(b);
+  printf("%d %d %d\\n", a->sum(b), a->sum(a), c->held());
+  delete a; delete b; delete c;
+  return 0;
+}
+""", expect="111 3 100\n")
+
+MODEL = "class A { public: A() {} virtual ~A() {} virtual int get() const { return x; } protected: int x; };\n"
+
+refuses("object parameter by value", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual int use(A a) { return a.get(); } };
+""", "cannot be flattened")
+
+refuses("object parameter by reference", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual int use(A &a) { return a.get(); } };
+""", "cannot be flattened")
+
+refuses("pointer to pointer parameter", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual int use(A **a) { return (*a)->get(); } };
+""", "cannot be flattened")
+
+refuses("object pointer returned: no ownership rule", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual A *give(A *a) { return a; } };
+""", "cannot be flattened")
+
+refuses("object pointer kept in a field: not borrowed", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual void keep(A *a) { p = a; } protected: A *p; };
+""", "cannot be flattened")
+
+refuses("pointer to a struct parameter", """
+struct P { int v; };
+class B { public: B() {} virtual ~B() {} virtual int use(P *p) { return p->v; } };
+""", "cannot be flattened")
+
+refuses("pointer to a class outside the sources", """
+#include <stdio.h>
+class Other;
+class B { public: B() {} virtual ~B() {} virtual int use(Other *o) { return o == 0; } };
+""", "not among")
+
+refuses("qualified call through a parameter", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual int use(A *a) { return a->A::get(); } };
+""", "unqualified")
+
+refuses("call through something other than a parameter", MODEL + """
+class B { public: B() {} virtual ~B() {} virtual int use(A *a) { return (a + 0)->get(); } };
+""", "parameter->method")
+
 refuses("member template", """
 class A { public: A() {} virtual ~A() {} virtual int get() const { return x; }
   template <class T> void put(T t) { x = (int)t; }

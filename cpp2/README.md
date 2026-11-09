@@ -67,7 +67,16 @@ means something else. Every rule below is exercised by `cpp2/test_oopcc.py`.
 | a constructor with arguments | a host allocating from `Type::size` has nothing to pass |
 | a copy or move constructor | oopc has no notion of copying; add a `clone` slot instead |
 | a class-typed or reference field, parameter or return | the C ABI carries scalars; anything else needs an ownership rule the generator would have to invent |
+| an object pointer anywhere but a parameter | a parameter is borrowed for the call; a field would keep it and a return would hand it over, and neither has an ownership rule |
+| a pointer to a class not among the sources, or to a `struct` | the C side has no such oopc type to name |
+| a call through another object that is not `parameter->method(...)`, unqualified | only that form has a receiver the generator can state exactly |
 | a member template | only instantiations could cross, and C cannot name one |
+
+**Pointer parameters.** A parameter may be `C *` or `const C *` where `C` is a model class among the
+sources. It is borrowed: the callee may use it during the call and cannot keep it, and the caller
+still owns it. The C signature is unchanged, so a caller holding a derived object casts it to the
+parameter's type, as any C upcast does; inside a model body, write that cast too (`(A *)this`), or the
+C compiler warns. A null argument is undefined, like a null `me`.
 
 `class` at file scope is a model class and must satisfy all of the above.
 `struct` is left alone — an ordinary helper type, the same split C++ convention
@@ -84,6 +93,8 @@ using clang cursors rather than text matching:
 | `this` | `me` |
 | `Bottle::setVolume(v)` | `Bottle_vf_setVolume((Bottle *)me, v)` — non-virtual, chains |
 | `setVolume(v)` | `SizedBottle_setVolume(me, v)` — virtual, via the dispatcher |
+| `p->x` | `p->x` — fields are flat, so unchanged |
+| `p->m(v)` | `Owner_m((Owner *)p, v)` — virtual, via the dispatcher |
 
 The qualified/unqualified distinction is exactly C++'s, and it lands on exactly
 the right side of the C pattern's most dangerous edge: a qualified call becomes
