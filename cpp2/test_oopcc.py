@@ -29,8 +29,11 @@ def run(sources, out):
                           capture_output=True, text=True)
 
 
-def accepts(label, code, main=None, expect=None):
-    """The generator flattens `code`, and the C compiles and runs."""
+def accepts(label, code, main=None, expect=None, cxx_main=None):
+    """The generator flattens `code`, and the C compiles and runs.
+
+    With `cxx_main`, the model also runs as C++ and must print the same (REQ4/INV-3).
+    """
     global passed
     with tempfile.TemporaryDirectory() as d:
         src = os.path.join(d, "T.hpp")
@@ -57,6 +60,16 @@ def accepts(label, code, main=None, expect=None):
         if main is not None:
             got = subprocess.run([exe], capture_output=True, text=True).stdout
             assert got == expect, "%s: got %r, want %r" % (label, got, expect)
+
+        if cxx_main is not None:
+            m = os.path.join(d, "m.cpp")
+            open(m, "w").write(cxx_main)
+            argv = ([os.environ.get("CXX", "c++"), "-std=c++17"] + warnings +
+                    ["-I" + d, "-o", exe, m])
+            out = subprocess.run(argv, capture_output=True, text=True)
+            assert out.returncode == 0, "%s: model did not compile\n%s" % (label, out.stderr)
+            got = subprocess.run([exe], capture_output=True, text=True).stdout
+            assert got == expect, "%s (C++ model): got %r, want %r" % (label, got, expect)
     print("  ok  %-52s accepted" % label)
     passed += 1
 
@@ -151,6 +164,31 @@ protected:
 #include "D.h"
 int main(void) { D_delete(D_new()); return 0; }
 """, expect="bye 1\n")
+
+accepts("REQ1/OM-5 derived, then base, once each", """
+#include <stdio.h>
+class A {
+public:
+  A() { n = 0; }
+  virtual ~A() { printf("base\\n"); }
+  virtual int get() const { return n; }
+protected:
+  int n;
+};
+class B : public A {
+public:
+  B() { k = 0; }
+  virtual ~B() { printf("derived\\n"); }
+protected:
+  int k;
+};
+""", main="""
+#include "B.h"
+int main(void) { A_delete((A *)B_new()); return 0; }
+""", cxx_main="""
+#include "T.hpp"
+int main() { A *a = new B; delete a; return 0; }
+""", expect="derived\nbase\n")
 
 print("\nrefuses what it cannot flatten")
 
