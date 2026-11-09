@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.7).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
-wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v4`](docs/REQUIREMENTS_v4.md)
+wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v5`](docs/REQUIREMENTS_v5.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
 [`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
@@ -127,7 +127,7 @@ a human.
   ordinary polymorphic C++ (real `virtual`) that knows nothing about oopc;
   the generator emits `cpp2/gen/*.{h,c}` in the exact shape of `src/Bottle.c`.
   It refuses anything outside the flattenable subset rather than emitting C that
-  quietly means something else — `cpp2/test_oopcc.py` has 21 refusal cases and
+  quietly means something else — `cpp2/test_oopcc.py` has 27 refusal cases and
   6 acceptance cases, and every new subset rule needs a refusal test with it.
   `cpp2/src/checks.inc` is compiled against both the model and the generated C (REQ4/INV-3), so a check added there holds both sides.
   Body translation is cursor-based, not textual; the qualified/unqualified call

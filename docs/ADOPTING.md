@@ -15,10 +15,34 @@ thread-safety beyond `const` tables are yours to add.
 | Wrapper over C (`include/*.hpp`) | C, then C++ | sizes, by `static_assert` | the C footguns, plus the wrapper's |
 | Inverted, header-only (`cpp1/`) | C++17, no `virtual` | prefixes, casts, the fini chain | exceptions, trusting callers |
 | Inverted, generated (`cpp2/`) | ordinary C++ | prefixes, casts, the fini chain | exceptions, trusting callers, **drift** |
+| Inverted, handle (not built here) | ordinary C++ | everything behind the gateway | exceptions, trusting callers, one thin function per method |
 
 `cpp2/` is the most legible route, because its source is ordinary C++ and the C reads like the
 hand-written version. **Adopt it with caution:** a generator can make its two sides disagree
 silently, and nothing about the output will look wrong.
+
+### The handle route
+
+Choose it when your hosts need a gateway and not the inheritance, which is usual for real C++ holding
+strings, containers, or other objects. The C type is opaque, and in C++ it is a smart pointer to your
+class:
+
+```cpp
+#ifdef __cplusplus
+using CThing = std::shared_ptr<Thing>;
+#else
+typedef struct CThing CThing;
+#endif
+```
+
+Each C function is one line over the C++ method. `CThing_init(me, ...)` constructs in `me`, or
+allocates when `me` is null; named variants such as `CThing_init_fromJson` take the place of
+overloads and may take arguments. Virtual dispatch stays inside C++, so hosts see one C type for a
+whole hierarchy. The cost is a smart pointer and its control block per object, and no inheritance in
+the host. It does not show the mechanism, so it is not what this repository teaches.
+
+**Keep a C++ exception out of it with one wrapper**, not a `try` in each function: in the code this
+route came from, the per-function version missed some.
 
 ## Footguns
 
@@ -68,9 +92,10 @@ with `Class_cast`. This is the first thing to fix.
 
 *What goes wrong:* on the inverted routes, an exception escaping into C or a host language may
 terminate the process or unwind through frames that cannot handle it. **Neither `cpp1/` nor `cpp2/`
-guards against this**, and the C ABI has no error channel yet.
-*Avoid it:* catch everything at each entry point and turn failure into a return value, or make sure
-no code behind the gateway can throw.
+guards against this**, and the examples here have no error channel.
+*Avoid it:* catch at every entry point, in one shared wrapper, and report through a convention: an
+`int` status with out-parameters, or null for a function returning an object. Or make sure no code
+behind the gateway can throw.
 
 ### Drift between a generator's two sides (`cpp2/`)
 
@@ -78,6 +103,13 @@ no code behind the gateway can throw.
 green.
 *Avoid it:* see guideline 12. Run the same checks against both sides, as `cpp2/src/checks.inc` does.
 Here that is a requirement of the examples (REQ4/INV-3); for your code it is a guideline.
+
+### A copy of this pattern going stale
+
+*What goes wrong:* a copied page or file stays as it was. Early versions of this pattern filled
+vtables lazily in mutable storage, which is unsound, and a copy still teaches that with nothing
+marking it old.
+*Avoid it:* record the oopc commit or release you copied from, next to the copy.
 
 ### Trusting a build's stale object
 
@@ -91,12 +123,12 @@ These apply when C++ is the source and the C ABI is the gateway to other languag
 
 | # | Guideline | Why |
 | - | --------- | --- |
-| 1 | Only scalars and pointers to oopc objects cross the gateway: no by-value classes, references, templates or `std::` types. | C has no layout or ownership for anything else. |
-| 2 | State ownership. A parameter is borrowed for the call; only `Class_new` returns what the caller must `Class_delete`. | Every host needs one rule. |
+| 1 | Only scalars, pointers to oopc objects or handles, and plain structs of doubles by pointer cross the gateway: no by-value classes, references, templates or `std::` types. | C has no layout or ownership for anything else. |
+| 2 | State ownership, with one of two rules. Borrowed: a parameter lasts for the call, and only `Class_new` returns what the caller must `Class_delete`. Handles: every handle is its own reference, a setter shares, a getter returns a new handle to delete. | Every host needs one rule. |
 | 3 | Use types whose width holds on every target: `double`, and `int` where 32 bits is enough. Avoid `long` and `size_t`. A 64-bit integer needs `BigInt` in JavaScript. | `long` and pointers change size across wasm32, 32-bit and 64-bit. |
-| 4 | Pass strings and buffers as pointer plus length, with the caller allocating. | Allocators do not cross languages. |
-| 5 | Let no exception cross. Failure is a return value. | Unwinding through C or a host is not portable. |
-| 6 | Give each class a default constructor only, and configure through methods. | A host allocates from `Type.size` with nothing to pass. |
+| 4 | Pass strings and buffers as pointer plus length, with the caller allocating. If the library must allocate, export its own free function. | Allocators do not cross languages, and a host left to find `free` can find the wrong one. |
+| 5 | Let no exception cross, using one wrapper. Failure is an `int` status, or null for an object. | Unwinding through C or a host is not portable, and a rule applied per function drifts. |
+| 6 | For host-allocated objects, a default constructor only, configured through methods. A handle may use named initializers with arguments. | A host allocating from `Type.size` has nothing to pass. |
 | 7 | One name per function: no overloads and no default arguments. | C and FFI have one symbol per name. |
 | 8 | Use single public inheritance and a virtual destructor, and make every crossing method virtual. | This is what the prefix layout can represent. |
 | 9 | Let hosts call functions; never have them read data symbols or struct offsets. | ctypes, raw wasm and Emscripten differ on data symbols. |
@@ -107,11 +139,12 @@ These apply when C++ is the source and the C ABI is the gateway to other languag
 ### What `cpp2/` holds you to today
 
 The [generator](../cpp2/README.md#the-subset) refuses input outside its subset, which enforces 6 and 8
-and refuses overloads (part of 7). Three things differ from the guidelines above:
+and refuses overloads and default arguments (7). Three things differ from the guidelines above:
 
 - **Guideline 1 and 2, for parameters only.** It accepts `C *` and `const C *` for a model class, as a
   borrowed pointer, and refuses an object pointer as a field or a return. Handing an object over has
   no rule yet.
 - **Looser than guideline 3.** It accepts `long` and `size_t`, so avoiding them is up to you. Its list
   of accepted types does not include `int32_t`.
+- **Stricter than guidelines 1 and 4.** It refuses plain structs, buffers and strings.
 - **Silent on 5 and 10.** Nothing checks for a throwing entry point or a reordered ABI.
