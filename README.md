@@ -155,6 +155,11 @@ writes go to file descriptor 1 and bypass `sys.stdout`, so under CPython they
 interleave out of order with Python's own output, and under Jupyter they land in
 the kernel's terminal rather than the cell.
 
+## Adopting the pattern
+
+Copying this into your own code? [docs/ADOPTING.md](docs/ADOPTING.md) lists what the pattern lets you
+get wrong, and the guidelines for a portable API when C++ is the source.
+
 ## Build and test
 
 ```bash
