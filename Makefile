@@ -1,4 +1,8 @@
 CFLAGS=-g -Iinclude -fPIC
+# REQ2/OM-3: a mistyped vtable slot is only a warning in GCC 12 C; clang already
+# errors.  Kept out of CFLAGS so a CFLAGS override keeps it, and off the C++
+# lines, where g++ rejects it as C-only.
+CCHECKS=-Werror=incompatible-pointer-types
 CXXFLAGS=$(CFLAGS) -std=c++11
 # cpp1/ needs auto NTTPs and inline variables; the C++11 wrapper does not.
 CXX17FLAGS=$(CFLAGS) -std=c++17
@@ -19,22 +23,22 @@ PYTHON?=python3
 NODE?=node
 
 tmp/Type.o : src/Type.c include/Type.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 tmp/Trace.o : src/Trace.c include/Trace.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 tmp/Bottle.o : src/Bottle.c include/Bottle.h include/Type.h include/Trace.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 tmp/SizedBottle.o : src/SizedBottle.c include/SizedBottle.h include/Bottle.h include/Type.h include/Trace.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 tmp/cmain.o : src/cmain.c include/Bottle.h include/SizedBottle.h include/Type.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 tmp/test_oopc.o : src/test_oopc.c include/Bottle.h include/SizedBottle.h include/Type.h
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 tmp/test_oopc_cpp.o : src/test_oopc.cpp include/Bottle.hpp include/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
@@ -192,20 +196,20 @@ $(CPP2_GEN) : tmp/cpp2.stamp
 gen : tmp/cpp2.stamp
 
 tmp/cpp2_Bottle.o : cpp2/gen/Bottle.c cpp2/gen/Bottle.h
-	$(CC) $(CFLAGS) -Icpp2/gen -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -Icpp2/gen -c -o $@ $<
 
 tmp/cpp2_SizedBottle.o : cpp2/gen/SizedBottle.c cpp2/gen/SizedBottle.h cpp2/gen/Bottle.h
-	$(CC) $(CFLAGS) -Icpp2/gen -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -Icpp2/gen -c -o $@ $<
 
 # src/cmain.c, unmodified, over the GENERATED headers.
 tmp/cpp2_cmain.o : src/cmain.c $(CPP2_GEN)
-	$(CC) $(CFLAGS) -Icpp2/gen -c -o $@ $<
+	$(CC) $(CFLAGS) $(CCHECKS) -Icpp2/gen -c -o $@ $<
 
 bin/cbottle2 : tmp/cpp2_cmain.o $(CPP2_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
 tmp/cpp2_test_oopc.o : src/test_oopc.c $(CPP2_GEN)
-	$(CC) -Icpp2/gen $(CFLAGS) -c -o $@ $<
+	$(CC) -Icpp2/gen $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
 bin/test_c2 : tmp/cpp2_test_oopc.o $(CPP2_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
@@ -219,7 +223,7 @@ bin/cpp2bottle : cpp2/src/cpp2main.cpp $(CPP2_MODEL)
 # REQ4/INV-3: cpp2/src/checks.inc compiled against each side.  -Icpp2/gen comes
 # first so the generated headers win over include/*.h, which share their names.
 bin/test_cpp2_generated : cpp2/src/test_generated.c cpp2/src/checks.inc $(CPP2_GEN) $(CPP2_OBJS)
-	$(CC) -Icpp2/gen $(CFLAGS) -o $@ $< $(CPP2_OBJS)
+	$(CC) -Icpp2/gen $(CFLAGS) $(CCHECKS) -o $@ $< $(CPP2_OBJS)
 
 bin/test_cpp2_model : cpp2/src/test_model.cpp cpp2/src/checks.inc $(CPP2_MODEL)
 	$(CXX) $(filter-out -Iinclude,$(CXX17FLAGS)) -Icpp2/model -o $@ $<

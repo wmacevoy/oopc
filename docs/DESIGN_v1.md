@@ -1,6 +1,6 @@
 # Design — v1
 
-How the requirements in [REQUIREMENTS_v5](REQUIREMENTS_v5.md) are met, and what was rejected. The
+How the requirements in [REQUIREMENTS_v6](REQUIREMENTS_v6.md) are met, and what was rejected. The
 mechanism itself — layout rules, the five wrapper rules, the fini footgun — is in
 [`CLAUDE.md`](../CLAUDE.md#architecture), which stays the one place it is written
 ([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.7/guide/05-design.md#d6)). This

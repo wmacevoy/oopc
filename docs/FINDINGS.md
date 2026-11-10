@@ -18,6 +18,21 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
 - REQ4/SHAPE-4 verdict: pass by Warren MacEvoy, 2026-11-09
 - REQ4/SHAPE-5 verdict: pass by Warren MacEvoy, 2026-11-09
 
+## 2026-11-09 — every layout assert fires; a mistyped slot is an error only under some compilers
+
+- **What happened:** with one change each in a scratch copy, all 13 asserts failed with their own
+  message: the size, alignment and standard-layout asserts in `include/*.hpp`, and the
+  byte-identical, alignment, standard-layout and vtable asserts in `cpp1/`. A mistyped vtable slot
+  is an error under clang 23 and under CI's `-Werror`, but under plain GCC 12 it is a warning and the
+  object builds, so REQ2/OM-3's "a mistyped slot is a compile error" does not hold for a default
+  `make` on that compiler.
+- **Kind:** K3 — the claim was checked on the compiler the author used.
+- **Cost:** none; found by QUEUE #5.
+- **Findable by:** seeing a guard refuse on each compiler that is supposed to enforce it (SE1/T3).
+- **Changed:** the Makefile passes `-Werror=incompatible-pointer-types` (`CCHECKS`) on every C
+  compile, outside `CFLAGS` so an override keeps it. Seen: the mistyped slot fails a plain `make`
+  on GCC 12, and builds with one warning under `make CCHECKS=`.
+
 ## 2026-11-09 — the generator accepted C++ it then mistranslated
 
 - **What happened:** run against a real adopter's headers and against that code's style, `cpp2/oopcc.py`

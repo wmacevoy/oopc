@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.7).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
-wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v5`](docs/REQUIREMENTS_v5.md)
+wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v6`](docs/REQUIREMENTS_v6.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
 [`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
@@ -62,7 +62,7 @@ Inheritance is by **prefix layout**; upcast is a plain pointer cast. Two invaria
 
 Reordering anything in `Bottle.h` requires mirroring it into `SizedBottle.h` in the same commit.
 
-**Every vtable slot takes `Bottle *` — the root base type — at every level, however deep.** That is the invariant that keeps the pattern cast-free: a derived class inherits a slot by naming the same function pointer (`SizedBottle`'s table lists `Bottle_vf_getVolume` verbatim), and each implementation downcasts its argument internally, which is an ordinary data-pointer cast. Never retype a slot to the derived class — that reintroduces a function-pointer cast, which is UB (C11 6.5.2.2p9) and traps under CFI. A mistyped slot is now a compile error (`-Wincompatible-function-pointer-types`).
+**Every vtable slot takes `Bottle *` — the root base type — at every level, however deep.** That is the invariant that keeps the pattern cast-free: a derived class inherits a slot by naming the same function pointer (`SizedBottle`'s table lists `Bottle_vf_getVolume` verbatim), and each implementation downcasts its argument internally, which is an ordinary data-pointer cast. Never retype a slot to the derived class — that reintroduces a function-pointer cast, which is UB (C11 6.5.2.2p9) and traps under CFI. A mistyped slot is a compile error: clang refuses it by default, and GCC refuses it through `CCHECKS=-Werror=incompatible-pointer-types` in the Makefile, kept out of `CFLAGS` so an override keeps it.
 
 Three layers per class:
 
