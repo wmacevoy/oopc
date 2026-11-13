@@ -7,12 +7,12 @@ Supersedes [v5](REQUIREMENTS_v5.md); IDs keep their meaning across versions, and
 retired rather than reused. Cite each requirement with the version that last changed it: `REQ6/BND-4`,
 but still `REQ5/SHAPE-2` and `REQ2/OM-6`.
 
-Client and proxy for adopters and students: Warren MacEvoy · Date agreed: 2026-11-09 · *Tell us what
+Client and proxy for adopters and students: Warren MacEvoy · Date agreed: 2026-11-13 · *Tell us what
 is wrong with it.*
 
 **What changed from v5:** the client dropped BND-4's size limit as arbitrary, and made "patch releases
 only" after finishing a guideline: a new major version is allowed and unlikely. Directed by the
-client, 2026-11-09.
+client 2026-11-09, agreed 2026-11-13.
 
 **What changed from v4 (in v5):** a real adopter showed a third inverted route, the handle. SHAPE-2 names it, as
 documentation only, with its costs listed under Exceptions; the deferred error channel records the
