@@ -260,8 +260,15 @@ RUSTC?=rustc
 # rustc's default edition is 2015; c"..." literals need 2021.
 RUSTFLAGS=--edition 2021 -g
 
-bin/test_rust : rust/test_oopc.rs rust/oopc.rs $(OBJS)
-	$(RUSTC) $(RUSTFLAGS) -o $@ $< $(addprefix -C link-arg=,$(OBJS))
+# The C objects reach rustc as a static library, not as bare link arguments:
+# rustc puts a library before libc on the link line and a bare argument after
+# it, and on Linux arm64 an object placed after libc cannot find the stack
+# protector's guard (FINDINGS 2026-11-14).
+tmp/liboopc.a : $(OBJS)
+	rm -f $@ && $(AR) rcs $@ $^
+
+bin/test_rust : rust/test_oopc.rs rust/oopc.rs tmp/liboopc.a
+	$(RUSTC) $(RUSTFLAGS) -o $@ $< -L native=tmp -l static=oopc
 
 rust : bin/test_rust
 
@@ -292,8 +299,11 @@ bin/cbottle-rust-inv : tmp/cmain.o $(RUSTINV_OBJS)
 bin/test_c-rust-inv : tmp/test_oopc.o $(RUSTINV_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
-bin/test_rust-rust-inv : rust/test_oopc.rs rust/oopc.rs $(RUSTINV_OBJS)
-	$(RUSTC) $(RUSTFLAGS) -o $@ $< $(addprefix -C link-arg=,$(RUSTINV_OBJS))
+tmp/liboopc-rust-inv.a : $(RUSTINV_OBJS)
+	rm -f $@ && $(AR) rcs $@ $^
+
+bin/test_rust-rust-inv : rust/test_oopc.rs rust/oopc.rs tmp/liboopc-rust-inv.a
+	$(RUSTC) $(RUSTFLAGS) -o $@ $< -L native=tmp -l static=oopc-rust-inv
 
 $(SHLIB_RUSTINV) : $(RUSTINV_OBJS)
 	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^

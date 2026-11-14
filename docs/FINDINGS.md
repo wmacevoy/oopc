@@ -33,6 +33,21 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
   REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
   seen failing; ADOPTING lists the footgun.
 
+## 2026-11-14 — the Rust suite did not link on Linux arm64
+
+- **What happened:** the first CI run of `make test-rust` failed on `ubuntu-24.04-arm` only:
+  `tmp/Trace.o: undefined reference to symbol '__stack_chk_guard'`. The C objects were passed to
+  rustc as bare link arguments, which it places after libc on the link line. On that platform the
+  stack protector's guard lives in the dynamic loader, which the linker takes from libc's script
+  only if something before it needs it. Linux x64 and macOS linked.
+- **Kind:** K2.
+- **Cost:** one red CI run on PR #7.
+- **Findable by:** CI on every platform shipped
+  ([SE1/O3](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/07-operating.md#o3)) —
+  which is how it was found. Not reproducible on the author's x64 machine.
+- **Changed:** the C objects go to rustc as a static library (`tmp/liboopc.a`, `-l static=oopc`),
+  which rustc places before libc; the Makefile says why.
+
 ## 2026-11-14 — each new Rust check was seen failing; three small surprises
 
 - **What happened:** REQ7/RS-1's assert stopped the build when a view had a size. REQ7/RS-2's checks
