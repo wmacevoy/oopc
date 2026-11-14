@@ -7,8 +7,8 @@ Supersedes [v6](REQUIREMENTS_v6.md); IDs keep their meaning across versions, and
 retired rather than reused. Cite each requirement with the version that last changed it: `REQ7/SHAPE-2`,
 but still `REQ6/BND-4` and `REQ2/OM-6`.
 
-Client and proxy for adopters and students: Warren MacEvoy · Directed by the client 2026-11-14; not
-yet agreed · *Tell us what is wrong with it.*
+Client and proxy for adopters and students: Warren MacEvoy · Date agreed: 2026-11-14 · *Tell us what
+is wrong with it.*
 
 **What changed from v6:** the client asked for Rust in both directions, and for directories named
 language first. SHAPE-2 now speaks of a language, shown for C++ and Rust, and no longer of C++ alone;
@@ -16,8 +16,9 @@ language first. SHAPE-2 now speaks of a language, shown for C++ and Rust, and no
 The C++ wrapper moved from `include/` and `src/` to `cpp/`, `cpp1/` became `cpp-inv/`, and `cpp2/`
 became `cpp-inv-gen/`. INV-1 to INV-4 and the other requirements that name those paths use the new
 names and mean what they did, so their citations stay current. The C ABI did not change. Drafted by
-the agent from the client's direction; the assumptions it had to make are listed under *Assumptions*
-as not yet confirmed.
+the agent from the client's direction. Directed and agreed by the client, 2026-11-14, with one
+assumption answered no: he wants a wasm build of the Rust, which is work for the next version
+([QUEUE](QUEUE.md) #23).
 
 **What changed from v5 (in v6):** the client dropped BND-4's size limit as arbitrary, and made "patch releases
 only" after finishing a guideline: a new major version is allowed and unlikely. Directed by the
@@ -250,13 +251,14 @@ a pattern shown to be understood, and the first thing an adopter must fix for pr
 - "wasm32 is a target, and portability that costs no readability is wanted." — confirmed,
   2026-10-26
 - "When teaching and use as a library conflict, the pattern wins." — confirmed, 2026-11-09
-- "The Rust examples need to run on the 64-bit native targets only, not 32-bit x86 or wasm32." — not
-  yet confirmed
+- "The Rust examples need to run on the 64-bit native targets only, not 32-bit x86 or wasm32." —
+  answered no, 2026-11-14: a wasm build of the Rust is wanted ([QUEUE](QUEUE.md) #23)
 - "A Rust owner that costs one pointer and a C allocation is acceptable, where the C++ wrapper costs
-  nothing." — not yet confirmed
+  nothing." — confirmed, 2026-11-14
 - "`rust-inv/` need not trace, and needs no Rust-side demo: the suites of the other languages are its
-  proof." — not yet confirmed
-- "One Rust inverted route is enough; the procedural macro is documentation only." — not yet confirmed
+  proof." — confirmed, 2026-11-14
+- "One Rust inverted route is enough; the procedural macro is documentation only." — confirmed,
+  2026-11-14
 
 ## Scope decisions
 

@@ -14,6 +14,7 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
 - REQ4/MISSION-1 verdict: pass by Warren MacEvoy, 2026-11-09
 - REQ4/SHAPE-1 verdict: pass by Warren MacEvoy, 2026-11-09
 - REQ5/SHAPE-2 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ7/SHAPE-2 verdict: pass by Warren MacEvoy, 2026-11-14
 - REQ4/SHAPE-3 verdict: pass by Warren MacEvoy, 2026-11-09
 - REQ4/SHAPE-4 verdict: pass by Warren MacEvoy, 2026-11-09
 - REQ4/SHAPE-5 verdict: pass by Warren MacEvoy, 2026-11-09
