@@ -92,8 +92,16 @@ a derived destructor runs it twice.
 
 *What goes wrong:* `~cxx::Bottle` is deliberately non-virtual, because a virtual one would add a
 second vtable pointer. Deleting a derived wrapper through a base pointer is undefined behavior.
+Finalizing is not what goes wrong: `~cxx::Bottle` calls through the C `fini` slot, which is the
+pattern's virtual destructor, so the derived finalizer runs. C++ then frees the block with the
+base's size. In a trial, C++11 ran clean; from C++14, where the size is passed to the deallocator,
+ASan reported 24 bytes allocated and 16 freed.
 *Avoid it:* use stack values and references, or allocate through the C API (`Bottle_new` and
-`Bottle_delete`), which dispatches correctly.
+`Bottle_delete`), which dispatches correctly. On C++20 there is a fix that costs no bytes: a
+*destroying* `operator delete(Bottle *, std::destroying_delete_t)` in the base wrapper, which
+`delete` calls instead of a destructor, and which calls `::Bottle_fini` and frees the whole block.
+In a trial that made `delete` through a base pointer clean under ASan with the size assert intact.
+It is not in `cpp/` because the wrapper stays C++11.
 
 ### A Rust type that owns the object's bytes
 

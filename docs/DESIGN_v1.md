@@ -1,6 +1,6 @@
 # Design — v1
 
-How the requirements in [REQUIREMENTS_v8](REQUIREMENTS_v8.md) are met, and what was rejected. The
+How the requirements in [REQUIREMENTS_v9](REQUIREMENTS_v9.md) are met, and what was rejected. The
 mechanism itself — layout rules, the five wrapper rules, the fini footgun — is in
 [`CLAUDE.md`](../CLAUDE.md#architecture), which stays the one place it is written
 ([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.7/guide/05-design.md#d6)). This
@@ -26,6 +26,7 @@ Reasons cite the commit that stated them; reasons with no source are marked *(in
 | `cpp-inv/` | 1–2 alt | C++17 | emits the layer-1/2 ABI from headers | per object |
 | `cpp-inv-gen/` | 1–2 alt | Python + libclang | emits `cpp-inv-gen/gen/*.{h,c}` from `cpp-inv-gen/model/` | per object |
 | `rust-inv/` | 1–2 alt | Rust, `#![no_std]` | emits the layer-1/2 ABI as one object file | per object |
+| `proof/oopc_proof.c` | 4 | C for a model checker | claims about layers 0–2, and the assumptions they rest on | — |
 
 A component depends only on lower layers. Nothing checks this
 ([QUEUE](QUEUE.md) #6).
@@ -109,12 +110,21 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
   line, and the downcast is written once per class — rejected: `macro_rules!` thunks (shorter, harder
   to read beside `src/`), a procedural macro (crates; output unseen) — source: this session
   *(inferred: the client asked for the route, not the mechanism)*.
-- **`rust-inv/` builds to one object file** — REQ7/INV-5, REQ8/BLD-3 — it links like a C object on
+- **`rust-inv/` builds to one object file** — REQ7/INV-5, REQ9/BLD-3 — it links like a C object on
   every platform with the Makefile's existing rules — rejected: a `staticlib` (needs a per-platform
   whole-archive flag for the shared library, and bundles `core`), a `cdylib` (does not export the C
   objects linked into it) — source: this session's trial. The same choice gives the wasm build
   (REQ8/BLD-5): the object is linked by the clang that builds `src/Type.c` for wasm, exactly as the
   raw wasm build links its C.
+
+- **The proof is a harness in C for a bounded model checker** — REQ9/PRF-1, REQ9/PRF-3 — it reads
+  like the C suite, needs no annotation in `src/`, runs in seconds, and gives a counterexample;
+  its assumptions are three lines — rejected: contracts in `src/` for a deductive verifier (no bound,
+  but the annotations would outweigh the code a student came to read), a proof assistant (a second
+  model of the code to keep in step) — source: client, 2026-11-14 ("bounded reasoning", "plain finite
+  numbers only in the K4s"); the choice of CBMC is the agent's *(inferred)*.
+- **The invariant also gets an inductive step** — REQ9/PRF-2 — any state that satisfies it, one call:
+  that removes the bound for the one claim where history matters — source: this session.
 
 ## Deferred
 

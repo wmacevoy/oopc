@@ -26,6 +26,23 @@ static void check(const char *label, double got, double want)
 struct PlainBottle      { const void *vftbl; double volume; };
 struct PlainSizedBottle { const void *vftbl; double volume; double maxVolume; };
 
+/* REQ1/OM-5: the fini slot is the virtual destructor.  To watch it, two classes
+   made here, Inner : Bottle and Outer : Inner.  They add no fields and no
+   slots, only a fini that writes its letter and chains to its base's fini with
+   a direct, non-virtual call.
+
+   Their tables are copied from Bottle's at run time, so this suite needs
+   nothing but the public ABI and runs unchanged against every build of it.  A
+   real class has a const table that names its base's slots: see SizedBottle.c. */
+static char finis[8];
+static int nfinis = 0;
+
+static BottleVftbl Inner_vftbl, Outer_vftbl;
+static void (*Bottle_fini_slot)(Bottle *me);
+
+static void Inner_vf_fini(Bottle *me) { finis[nfinis++] = 'I'; Bottle_fini_slot(me); }
+static void Outer_vf_fini(Bottle *me) { finis[nfinis++] = 'O'; Inner_vf_fini(me); }
+
 int main(void)
 {
   Bottle *plain = Bottle_new();
@@ -86,6 +103,19 @@ int main(void)
     check("REQ2/TY-3 clamped in caller-owned memory", Bottle_getVolume((Bottle*)mine), 3);
     SizedBottle_fini(mine);
     free(mine);
+  }
+
+  printf("\nthe virtual destructor\n");
+  {
+    Bottle *outer = Bottle_new();
+    Bottle_fini_slot = outer->vftbl->fini;
+    Inner_vftbl = *outer->vftbl;  Inner_vftbl.fini = Inner_vf_fini;
+    Outer_vftbl = Inner_vftbl;    Outer_vftbl.fini = Outer_vf_fini;
+    outer->vftbl = &Outer_vftbl;   /* what Outer_init would do after Bottle_init */
+    Bottle_delete(outer);          /* through the base: only a Bottle * is in sight */
+    check("REQ1/OM-5 delete through Bottle* ran two finis", nfinis, 2);
+    check("REQ1/OM-5 the derived fini first", finis[0] == 'O', 1);
+    check("REQ1/OM-5 then its base's, once each", finis[1] == 'I', 1);
   }
 
   Bottle_delete(plain);
