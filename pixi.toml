@@ -7,13 +7,13 @@ platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 
 [dependencies]
 python = ">=3.9"
-# rust/ and rust-inv/ build with bare rustc: no cargo project, no crates (REQ8/BLD-3).
+# rust/ and rust-inv/ build with bare rustc: no cargo project, no crates (REQ9/BLD-3).
 rust = ">=1.77"
 
 [pypi-dependencies]
 libclang = "*"
 
-# The oldest Python supported (REQ8/BLD-3): `pixi run -e py39 ...`.
+# The oldest Python supported (REQ9/BLD-3): `pixi run -e py39 ...`.
 [feature.py39.dependencies]
 python = "3.9.*"
 

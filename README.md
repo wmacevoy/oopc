@@ -166,6 +166,33 @@ None of them replaces `src/*.c`. For teaching, the hand-written C is the artifac
 that shows the mechanism; the inverted models show what it costs to stop
 maintaining it by hand.
 
+## A proof, not only tests
+
+A test checks the cases someone thought of. `proof/oopc_proof.c` states the same
+claims for a bounded model checker (CBMC), which checks them for **every** class,
+every argument and every sequence of four calls — and, for the invariant
+`0 ≤ volume ≤ maxVolume`, from any state at all, by one inductive step.
+
+```c
+Bottle_setVolume(b, x);            /* x is ANY finite double */
+__CPROVER_assert(Bottle_getVolume(b) == clamp(x, 0, max),
+                 "REQ2/OM-6 setVolume clamps into [0, max]");
+```
+
+Each side of the C ABI assumes something of the other, and a proof is where
+those assumptions have to be written down. This one has three, listed at the
+top of the file: numbers are finite, an execution is at most four calls, and the
+checker's C is the compiler's. Nothing is assumed about `malloc`.
+
+The same proof passes on the hand-written C and on the C that `cpp-inv-gen/`
+generates. It refuses a removed clamp, a cast that accepts anything, a leak, and
+the `Bottle_fini` recursion — and, with the first assumption removed, it finds
+NaN by itself.
+
+```bash
+make prove CBMC=/path/to/cbmc
+```
+
 ## Tracing
 
 `TRACE(...)` is off unless you build with `-DDEBUG`, and even when off it still
