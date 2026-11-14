@@ -10,9 +10,11 @@ but still `REQ7/SHAPE-2` and `REQ2/OM-6`.
 Client and proxy for adopters and students: Warren MacEvoy · Directed by the client 2026-11-14; not
 yet agreed · *Tell us what is wrong with it.*
 
-**What changed from v7:** the client asked for a wasm build of the Rust. BLD-5 is new: `rust-inv/`
-builds for wasm32 and passes the JS suite. BLD-3 changed to say where that build's compiler comes
-from, and the operating envelope and one deferred item follow. Nothing else changed.
+**What changed from v7:** the client asked for a wasm build of the Rust, and for a self-test of the
+class in the Rust constructor. BLD-5 is new: `rust-inv/` builds for wasm32 and passes the JS suite.
+RS-5 is new: a Rust constructor refuses an object of another class. BLD-3 changed to say where the
+wasm build's compiler comes from, and the operating envelope, the inputs table and one deferred item
+follow. Nothing else changed.
 
 **What changed from v6 (in v7):** the client asked for Rust in both directions, and for directories named
 language first. SHAPE-2 now speaks of a language, shown for C++ and Rust, and no longer of C++ alone;
@@ -186,6 +188,8 @@ presents it. An adopter inherits the footguns, so ADP-1 is written for them.
 - **TR-1** *(since v1)* Without `-DDEBUG` nothing is traced; a stale trace format string fails the
   build either way.
 - **TR-2** *(since v1)* A `-DDEBUG` wasm build traces to the JS console.
+- **RS-5** *(since v8)* A Rust constructor checks that the object C built is of the class it declares,
+  at the cost of one pointer comparison, and panics with both class names if it is not.
 
 ### Inverted models
 
@@ -234,7 +238,7 @@ Every call is synchronous, so nothing is late.
 | `double` volume or max | — | negative → 0 (`SizedBottle`); NaN: out of contract | — |
 | `malloc` in `Class_new` | null → returns null | — | — |
 | a C++ model to `cpp-inv-gen/oopcc.py` | missing file: fails | outside the subset: refused (INV-2) | — |
-| `Class_new` to the Rust binding | null: panics, no owner is made | — | — |
+| `Class_new` to the Rust binding | null: panics, no owner is made | an object of another class: deleted, then panics (RS-5) | — |
 | an `extern` declaration in `rust/oopc.rs` | missing: fails to link | disagrees with the header: undefined, nothing checks it (ADP-1) | — |
 
 ## Operating envelope
@@ -299,6 +303,10 @@ None.
 
 ## Deferred
 
+- *Not yet:* a canary in the vtable or in `Type`, such as a slot count — it would catch a reordered or
+  missing slot, which nothing checks in hand-written C, but it changes `Type`'s layout, the one-way
+  door. RS-5 does what the ABI allows today. Trigger: a slot-order bug in an adopter's code, or a new
+  major version.
 - *Not yet:* `align` in `Type` — needed only for an over-aligned class. TY-4 means adding it no longer
   touches the JS binding.
 - *Not yet:* wasm64 — the JS binding would need `BigInt` for pointers. Trigger: a host that wants

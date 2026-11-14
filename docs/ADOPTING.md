@@ -109,7 +109,11 @@ pointer. A swap of two views then moves nothing. Assert `size_of::<View>() == 0`
 *What goes wrong:* `rust/oopc.rs` restates each C signature by hand, as ctypes code does. Nothing
 compares it with `include/*.h`, so a wrong argument type compiles, links, and is undefined behavior.
 *Avoid it:* keep the block short and beside the header in review, or generate it with a binding
-generator once the API is large enough to pay for the dependency.
+generator once the API is large enough to pay for the dependency. One part can check itself: have
+each constructor compare `Type_of` the new object with the class's `Class_getType()`, as
+`rust/oopc.rs` does. That catches a constructor bound to the wrong function, which otherwise shows up
+as a crash at the first call through a slot the object's vtable does not have. It does not catch a
+wrong argument type.
 
 ### A base with tail padding (`rust-inv/`)
 

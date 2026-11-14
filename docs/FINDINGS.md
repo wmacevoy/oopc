@@ -34,6 +34,21 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
   REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
   seen failing; ADOPTING lists the footgun.
 
+## 2026-11-14 — a constructor bound to the wrong C function segfaulted, until it tested itself
+
+- **What happened:** the client asked whether a canary could verify an object's shape in the Rust
+  constructor. With `SizedBottle_new` deliberately bound to `Bottle_new` and no check, the suite
+  died with a segmentation fault at the first call through a slot a `Bottle`'s vtable does not have.
+  With the constructor comparing `Type_of` the new object against `SizedBottle_getType()`, the same
+  build stops with `self-test: Class_new built a "Bottle", not a "SizedBottle"`. With the comparison
+  disabled, `make test-rust` failed, saying the wrong constructor had not stopped at the self-test.
+- **Kind:** K1.
+- **Cost:** none.
+- **Findable by:** a fault on request: the suite built with `--cfg wrong_new`.
+- **Changed:** REQ8/RS-5; `make test-rust` builds and runs the faulty variant every time. A slot-count
+  canary, which would also catch a reordered slot, is deferred in REQUIREMENTS_v8 because it changes
+  `Type`'s layout.
+
 ## 2026-11-14 — `rust-inv/` built for wasm32 unchanged
 
 - **What happened:** the client asked for a wasm build of the Rust. The `rust-inv/` sources compiled

@@ -270,10 +270,19 @@ tmp/liboopc.a : $(OBJS)
 bin/test_rust : rust/test_oopc.rs rust/oopc.rs tmp/liboopc.a
 	$(RUSTC) $(RUSTFLAGS) -o $@ $< -L native=tmp -l static=oopc
 
-rust : bin/test_rust
+# REQ8/RS-5: the same suite with SizedBottle_new bound to Bottle_new, the fault
+# the constructor's self-test exists for.  It must refuse, and say why.
+bin/test_rust_wrong_new : rust/test_oopc.rs rust/oopc.rs tmp/liboopc.a
+	$(RUSTC) $(RUSTFLAGS) --cfg wrong_new --check-cfg 'cfg(wrong_new)' -o $@ $< -L native=tmp -l static=oopc
 
-test-rust : bin/test_rust
+rust : bin/test_rust bin/test_rust_wrong_new
+
+test-rust : bin/test_rust bin/test_rust_wrong_new
 	@./bin/test_rust > tmp/test_rust.out || { cat tmp/test_rust.out; exit 1; }
+	@if ./bin/test_rust_wrong_new > tmp/test_rust_wrong_new.out 2>&1; then \
+	  echo "REQ8/RS-5: a constructor bound to the wrong C function was accepted"; exit 1; fi
+	@grep -q 'self-test: Class_new built a "Bottle", not a "SizedBottle"' tmp/test_rust_wrong_new.out \
+	  || { echo "REQ8/RS-5: the wrong constructor failed, but not at the self-test:"; cat tmp/test_rust_wrong_new.out; exit 1; }
 	@echo "Rust test: PASS"
 
 # ===========================================================================
