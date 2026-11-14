@@ -1,4 +1,4 @@
-/* REQ4/INV-3: the shared checks against the C++ model.  Run: make test-cpp2
+/* REQ4/INV-3: the shared checks against the C++ model.  Run: make test-cpp-inv-gen
    These functions give the model the C names checks.inc is written in. */
 
 #include "SizedBottle.hpp"

@@ -11,7 +11,7 @@ python = ">=3.9"
 [pypi-dependencies]
 libclang = "*"
 
-# The oldest Python supported (REQ4/BLD-3): `pixi run -e py39 ...`.
+# The oldest Python supported (REQ7/BLD-3): `pixi run -e py39 ...`.
 [feature.py39.dependencies]
 python = "3.9.*"
 

@@ -1,5 +1,5 @@
 /*
-  cpp-2 model: the derived class, in ordinary C++.
+  cpp-inv-gen model: the derived class, in ordinary C++.
 
   Note what is NOT here, compared with src/SizedBottle.c:
 

@@ -2,11 +2,11 @@
   REQ4/INV-3: the behavior the C++ model and its generated C must share.
 
   One file, compiled twice, so the two sides cannot be held to different checks:
-  as C against cpp2/gen (test_generated.c), and as C++ against cpp2/model
+  as C against cpp-inv-gen/gen (test_generated.c), and as C++ against cpp-inv-gen/model
   (test_model.cpp, which supplies the same C names over the model).
 
   The includer defines CHECK_SIDE.  Destruction order (REQ1/OM-5) is checked in
-  cpp2/test_oopcc.py, because the model's destructors are empty.
+  cpp-inv-gen/test_oopcc.py, because the model's destructors are empty.
 */
 
 #include <stdio.h>

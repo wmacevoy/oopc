@@ -1,7 +1,7 @@
 #pragma once
 
 /*
-  cpp-1 machinery: the inverted oopc model.
+  cpp-inv machinery: the inverted oopc model.
 
   In the C version (the src/ .c files) a class is written three times -- the vf_
   implementations, the vtable literal, and the public dispatchers -- and four

@@ -3,8 +3,10 @@ CFLAGS=-g -Iinclude -fPIC
 # errors.  Kept out of CFLAGS so a CFLAGS override keeps it, and off the C++
 # lines, where g++ rejects it as C-only.
 CCHECKS=-Werror=incompatible-pointer-types
-CXXFLAGS=$(CFLAGS) -std=c++11
-# cpp1/ needs auto NTTPs and inline variables; the C++11 wrapper does not.
+# -Icpp is here, not in CFLAGS, so a CFLAGS override keeps it and the C++17
+# builds below never see the cxx:: wrapper headers.
+CXXFLAGS=$(CFLAGS) -std=c++11 -Icpp
+# cpp-inv/ needs auto NTTPs and inline variables; the C++11 wrapper does not.
 CXX17FLAGS=$(CFLAGS) -std=c++17
 
 UNAME_S:=$(shell uname -s)
@@ -40,10 +42,10 @@ tmp/cmain.o : src/cmain.c include/Bottle.h include/SizedBottle.h include/Type.h
 tmp/test_oopc.o : src/test_oopc.c include/Bottle.h include/SizedBottle.h include/Type.h
 	$(CC) $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
-tmp/test_oopc_cpp.o : src/test_oopc.cpp include/Bottle.hpp include/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
+tmp/test_oopc_cpp.o : cpp/test_oopc.cpp cpp/Bottle.hpp cpp/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-tmp/cppmain.o : src/cppmain.cpp include/Bottle.hpp include/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
+tmp/cppmain.o : cpp/cppmain.cpp cpp/Bottle.hpp cpp/SizedBottle.hpp include/Bottle.h include/SizedBottle.h
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 bin/cbottle : tmp/cmain.o $(OBJS)
@@ -66,13 +68,13 @@ $(SHLIB) : $(OBJS)
 	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^
 
 .PHONY: all clean test test-c test-cpp test-python test-js wasm wasm-raw wasm-debug emcc-build \
-        cpp1 cpp2 gen test-cpp1 test-cpp2 test-inverted
+        cpp-inv cpp-inv-gen gen test-cpp-inv test-cpp-inv-gen test-inverted
 
 all : bin/cbottle bin/cppbottle $(SHLIB)
 
 clean : 
 	/bin/rm -rf tmp/* bin/*
-	/bin/rm -f cpp2/gen/*.h cpp2/gen/*.c
+	/bin/rm -f cpp-inv-gen/gen/*.h cpp-inv-gen/gen/*.c
 
 test : test-c test-cpp test-python
 	@echo "All tests: PASS"
@@ -131,120 +133,120 @@ test-js :
 	$(NODE) js/test_oopc.mjs && echo "JS test: PASS"
 
 # ===========================================================================
-# cpp-1 -- C++ is the source, the C ABI is emitted by templates in a header.
+# cpp-inv -- C++ is the source, the C ABI is emitted by templates in a header.
 #
-# Same symbols, same layout, same behaviour: bin/cbottle1 is the UNMODIFIED
+# Same symbols, same layout, same behaviour: bin/cbottle-cpp-inv is the UNMODIFIED
 # src/cmain.c linked against the C++-authored implementation, and its output
 # must be byte-identical to bin/cbottle's.  python/oopc.py runs against it
 # unchanged too, via OOPC_LIB.
 # ===========================================================================
 
-CPP1_HDRS=cpp1/include/oopc/Class.hpp cpp1/include/oopc/Bottle.hpp cpp1/include/oopc/SizedBottle.hpp
-CPP1_OBJS=tmp/cpp1_exports.o tmp/Type.o tmp/Trace.o
-SHLIB1=bin/liboopc1.$(SHLIB_EXT)
+CPPINV_HDRS=cpp-inv/include/oopc/Class.hpp cpp-inv/include/oopc/Bottle.hpp cpp-inv/include/oopc/SizedBottle.hpp
+CPPINV_OBJS=tmp/cpp-inv_exports.o tmp/Type.o tmp/Trace.o
+SHLIB_CPPINV=bin/liboopc-cpp-inv.$(SHLIB_EXT)
 
-tmp/cpp1_exports.o : cpp1/src/exports.cpp $(CPP1_HDRS) include/Bottle.h include/SizedBottle.h
-	$(CXX) $(CXX17FLAGS) -Icpp1/include -c -o $@ $<
+tmp/cpp-inv_exports.o : cpp-inv/src/exports.cpp $(CPPINV_HDRS) include/Bottle.h include/SizedBottle.h
+	$(CXX) $(CXX17FLAGS) -Icpp-inv/include -c -o $@ $<
 
-tmp/cpp1main.o : cpp1/src/cpp1main.cpp $(CPP1_HDRS)
-	$(CXX) $(CXX17FLAGS) -Icpp1/include -c -o $@ $<
+tmp/cpp-inv_main.o : cpp-inv/src/main.cpp $(CPPINV_HDRS)
+	$(CXX) $(CXX17FLAGS) -Icpp-inv/include -c -o $@ $<
 
-bin/cpp1bottle : tmp/cpp1main.o $(CPP1_OBJS)
+bin/cpp-inv-bottle : tmp/cpp-inv_main.o $(CPPINV_OBJS)
 	$(CXX) $(CXX17FLAGS) -o $@ $^
 
-bin/cbottle1 : tmp/cmain.o $(CPP1_OBJS)
+bin/cbottle-cpp-inv : tmp/cmain.o $(CPPINV_OBJS)
 	$(CXX) $(CXX17FLAGS) -o $@ $^
 
-bin/test_c1 : tmp/test_oopc.o $(CPP1_OBJS)
+bin/test_c-cpp-inv : tmp/test_oopc.o $(CPPINV_OBJS)
 	$(CXX) $(CXX17FLAGS) -o $@ $^
 
-$(SHLIB1) : $(CPP1_OBJS)
+$(SHLIB_CPPINV) : $(CPPINV_OBJS)
 	$(CXX) $(CXX17FLAGS) $(SHARED_FLAG) -o $@ $^
 
-cpp1 : bin/cpp1bottle bin/cbottle1 bin/test_c1 $(SHLIB1)
+cpp-inv : bin/cpp-inv-bottle bin/cbottle-cpp-inv bin/test_c-cpp-inv $(SHLIB_CPPINV)
 
-test-cpp1 : bin/cbottle bin/cbottle1 bin/cpp1bottle bin/test_c1 $(SHLIB1)
-	@./bin/test_c1 > tmp/test_c1.out || { cat tmp/test_c1.out; exit 1; }
-	@echo "cpp1: unmodified C suite: PASS"
-	@./bin/cbottle > tmp/c.out && ./bin/cbottle1 > tmp/c1.out
-	@diff tmp/c.out tmp/c1.out && echo "cpp1: the C demo is byte-identical against the C++ build"
-	@./bin/cpp1bottle > /dev/null && echo "cpp1: native C++ demo: PASS"
-	@OOPC_LIB=$(SHLIB1) $(PYTHON) python/test_oopc.py > /dev/null \
-	  && echo "cpp1: unmodified Python binding against liboopc1: PASS"
+test-cpp-inv : bin/cbottle bin/cbottle-cpp-inv bin/cpp-inv-bottle bin/test_c-cpp-inv $(SHLIB_CPPINV)
+	@./bin/test_c-cpp-inv > tmp/test_c-cpp-inv.out || { cat tmp/test_c-cpp-inv.out; exit 1; }
+	@echo "cpp-inv: unmodified C suite: PASS"
+	@./bin/cbottle > tmp/c.out && ./bin/cbottle-cpp-inv > tmp/c-cpp-inv.out
+	@diff tmp/c.out tmp/c-cpp-inv.out && echo "cpp-inv: the C demo is byte-identical against the C++ build"
+	@./bin/cpp-inv-bottle > /dev/null && echo "cpp-inv: native C++ demo: PASS"
+	@OOPC_LIB=$(SHLIB_CPPINV) $(PYTHON) python/test_oopc.py > /dev/null \
+	  && echo "cpp-inv: unmodified Python binding against liboopc-cpp-inv: PASS"
 
 # ===========================================================================
-# cpp-2 -- C++ is the source, libclang emits the C.
+# cpp-inv-gen -- C++ is the source, libclang emits the C.
 #
-# cpp2/model/*.hpp is ordinary single-inheritance polymorphic C++ that knows
-# nothing about oopc.  cpp2/oopcc.py flattens it into cpp2/gen/*.{h,c} in the
-# shape of src/Bottle.c.  Same two proofs as cpp-1.
+# cpp-inv-gen/model/*.hpp is ordinary single-inheritance polymorphic C++ that knows
+# nothing about oopc.  cpp-inv-gen/oopcc.py flattens it into cpp-inv-gen/gen/*.{h,c} in the
+# shape of src/Bottle.c.  Same two proofs as cpp-inv.
 # ===========================================================================
 
-CPP2_MODEL=cpp2/model/Bottle.hpp cpp2/model/SizedBottle.hpp
-CPP2_GEN=cpp2/gen/Bottle.h cpp2/gen/Bottle.c cpp2/gen/SizedBottle.h cpp2/gen/SizedBottle.c
-CPP2_OBJS=tmp/cpp2_Bottle.o tmp/cpp2_SizedBottle.o tmp/Type.o tmp/Trace.o
-SHLIB2=bin/liboopc2.$(SHLIB_EXT)
+CPPINVGEN_MODEL=cpp-inv-gen/model/Bottle.hpp cpp-inv-gen/model/SizedBottle.hpp
+CPPINVGEN_GEN=cpp-inv-gen/gen/Bottle.h cpp-inv-gen/gen/Bottle.c cpp-inv-gen/gen/SizedBottle.h cpp-inv-gen/gen/SizedBottle.c
+CPPINVGEN_OBJS=tmp/cpp-inv-gen_Bottle.o tmp/cpp-inv-gen_SizedBottle.o tmp/Type.o tmp/Trace.o
+SHLIB_CPPINVGEN=bin/liboopc-cpp-inv-gen.$(SHLIB_EXT)
 
 # One run of the generator produces all four files.  Grouped targets (&:) need
 # GNU Make 4.3; a stamp says the same thing to every make in use.
-tmp/cpp2.stamp : cpp2/oopcc.py $(CPP2_MODEL)
-	$(PYTHON) cpp2/oopcc.py $(CPP2_MODEL) -o cpp2/gen -I cpp2/model
+tmp/cpp-inv-gen.stamp : cpp-inv-gen/oopcc.py $(CPPINVGEN_MODEL)
+	$(PYTHON) cpp-inv-gen/oopcc.py $(CPPINVGEN_MODEL) -o cpp-inv-gen/gen -I cpp-inv-gen/model
 	@touch $@
 
-$(CPP2_GEN) : tmp/cpp2.stamp
+$(CPPINVGEN_GEN) : tmp/cpp-inv-gen.stamp
 
-gen : tmp/cpp2.stamp
+gen : tmp/cpp-inv-gen.stamp
 
-tmp/cpp2_Bottle.o : cpp2/gen/Bottle.c cpp2/gen/Bottle.h
-	$(CC) $(CFLAGS) $(CCHECKS) -Icpp2/gen -c -o $@ $<
+tmp/cpp-inv-gen_Bottle.o : cpp-inv-gen/gen/Bottle.c cpp-inv-gen/gen/Bottle.h
+	$(CC) $(CFLAGS) $(CCHECKS) -Icpp-inv-gen/gen -c -o $@ $<
 
-tmp/cpp2_SizedBottle.o : cpp2/gen/SizedBottle.c cpp2/gen/SizedBottle.h cpp2/gen/Bottle.h
-	$(CC) $(CFLAGS) $(CCHECKS) -Icpp2/gen -c -o $@ $<
+tmp/cpp-inv-gen_SizedBottle.o : cpp-inv-gen/gen/SizedBottle.c cpp-inv-gen/gen/SizedBottle.h cpp-inv-gen/gen/Bottle.h
+	$(CC) $(CFLAGS) $(CCHECKS) -Icpp-inv-gen/gen -c -o $@ $<
 
 # src/cmain.c, unmodified, over the GENERATED headers.
-tmp/cpp2_cmain.o : src/cmain.c $(CPP2_GEN)
-	$(CC) $(CFLAGS) $(CCHECKS) -Icpp2/gen -c -o $@ $<
+tmp/cpp-inv-gen_cmain.o : src/cmain.c $(CPPINVGEN_GEN)
+	$(CC) $(CFLAGS) $(CCHECKS) -Icpp-inv-gen/gen -c -o $@ $<
 
-bin/cbottle2 : tmp/cpp2_cmain.o $(CPP2_OBJS)
+bin/cbottle-cpp-inv-gen : tmp/cpp-inv-gen_cmain.o $(CPPINVGEN_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
-tmp/cpp2_test_oopc.o : src/test_oopc.c $(CPP2_GEN)
-	$(CC) -Icpp2/gen $(CFLAGS) $(CCHECKS) -c -o $@ $<
+tmp/cpp-inv-gen_test_oopc.o : src/test_oopc.c $(CPPINVGEN_GEN)
+	$(CC) -Icpp-inv-gen/gen $(CFLAGS) $(CCHECKS) -c -o $@ $<
 
-bin/test_c2 : tmp/cpp2_test_oopc.o $(CPP2_OBJS)
+bin/test_c-cpp-inv-gen : tmp/cpp-inv-gen_test_oopc.o $(CPPINVGEN_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# The model is built WITHOUT -Iinclude: cpp2/src/cpp2main.cpp includes
-# "SizedBottle.hpp", and include/SizedBottle.hpp is the cxx:: wrapper for the C
-# library -- a different thing with the same basename.
-bin/cpp2bottle : cpp2/src/cpp2main.cpp $(CPP2_MODEL)
-	$(CXX) $(filter-out -Iinclude,$(CXX17FLAGS)) -Icpp2/model -o $@ $<
+# The model needs nothing from include/ or cpp/: cpp/SizedBottle.hpp is the
+# cxx:: wrapper, a different thing with the same basename, and CXX17FLAGS does
+# not reach it.
+bin/cpp-inv-gen-bottle : cpp-inv-gen/src/main.cpp $(CPPINVGEN_MODEL)
+	$(CXX) $(CXX17FLAGS) -Icpp-inv-gen/model -o $@ $<
 
-# REQ4/INV-3: cpp2/src/checks.inc compiled against each side.  -Icpp2/gen comes
+# REQ4/INV-3: cpp-inv-gen/src/checks.inc compiled against each side.  -Icpp-inv-gen/gen comes
 # first so the generated headers win over include/*.h, which share their names.
-bin/test_cpp2_generated : cpp2/src/test_generated.c cpp2/src/checks.inc $(CPP2_GEN) $(CPP2_OBJS)
-	$(CC) -Icpp2/gen $(CFLAGS) $(CCHECKS) -o $@ $< $(CPP2_OBJS)
+bin/test-cpp-inv-gen-generated : cpp-inv-gen/src/test_generated.c cpp-inv-gen/src/checks.inc $(CPPINVGEN_GEN) $(CPPINVGEN_OBJS)
+	$(CC) -Icpp-inv-gen/gen $(CFLAGS) $(CCHECKS) -o $@ $< $(CPPINVGEN_OBJS)
 
-bin/test_cpp2_model : cpp2/src/test_model.cpp cpp2/src/checks.inc $(CPP2_MODEL)
-	$(CXX) $(filter-out -Iinclude,$(CXX17FLAGS)) -Icpp2/model -o $@ $<
+bin/test-cpp-inv-gen-model : cpp-inv-gen/src/test_model.cpp cpp-inv-gen/src/checks.inc $(CPPINVGEN_MODEL)
+	$(CXX) $(CXX17FLAGS) -Icpp-inv-gen/model -o $@ $<
 
-$(SHLIB2) : $(CPP2_OBJS)
+$(SHLIB_CPPINVGEN) : $(CPPINVGEN_OBJS)
 	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^
 
-cpp2 : bin/cbottle2 bin/cpp2bottle bin/test_c2 bin/test_cpp2_generated bin/test_cpp2_model $(SHLIB2)
+cpp-inv-gen : bin/cbottle-cpp-inv-gen bin/cpp-inv-gen-bottle bin/test_c-cpp-inv-gen bin/test-cpp-inv-gen-generated bin/test-cpp-inv-gen-model $(SHLIB_CPPINVGEN)
 
-test-cpp2 : bin/cbottle bin/cbottle2 bin/cpp2bottle bin/test_c2 bin/test_cpp2_generated bin/test_cpp2_model $(SHLIB2)
-	@./bin/test_c2 > tmp/test_c2.out || { cat tmp/test_c2.out; exit 1; }
-	@echo "cpp2: unmodified C suite: PASS"
-	@$(PYTHON) cpp2/test_oopcc.py > /dev/null && echo "cpp2: generator subset tests: PASS"
-	@./bin/cbottle > tmp/c.out && ./bin/cbottle2 > tmp/c2.out
-	@diff tmp/c.out tmp/c2.out && echo "cpp2: the C demo is byte-identical against the generated C"
-	@./bin/test_cpp2_generated > tmp/test_g2.out || { cat tmp/test_g2.out; exit 1; }
-	@./bin/test_cpp2_model > tmp/test_m2.out || { cat tmp/test_m2.out; exit 1; }
-	@echo "cpp2: same checks against the C++ model and the generated C: PASS"
-	@./bin/cpp2bottle > /dev/null && echo "cpp2: C++ model demo ran"
-	@OOPC_LIB=$(SHLIB2) $(PYTHON) python/test_oopc.py > /dev/null \
-	  && echo "cpp2: unmodified Python binding against liboopc2: PASS"
+test-cpp-inv-gen : bin/cbottle bin/cbottle-cpp-inv-gen bin/cpp-inv-gen-bottle bin/test_c-cpp-inv-gen bin/test-cpp-inv-gen-generated bin/test-cpp-inv-gen-model $(SHLIB_CPPINVGEN)
+	@./bin/test_c-cpp-inv-gen > tmp/test_c-cpp-inv-gen.out || { cat tmp/test_c-cpp-inv-gen.out; exit 1; }
+	@echo "cpp-inv-gen: unmodified C suite: PASS"
+	@$(PYTHON) cpp-inv-gen/test_oopcc.py > /dev/null && echo "cpp-inv-gen: generator subset tests: PASS"
+	@./bin/cbottle > tmp/c.out && ./bin/cbottle-cpp-inv-gen > tmp/c-cpp-inv-gen.out
+	@diff tmp/c.out tmp/c-cpp-inv-gen.out && echo "cpp-inv-gen: the C demo is byte-identical against the generated C"
+	@./bin/test-cpp-inv-gen-generated > tmp/test-gen.out || { cat tmp/test-gen.out; exit 1; }
+	@./bin/test-cpp-inv-gen-model > tmp/test-model.out || { cat tmp/test-model.out; exit 1; }
+	@echo "cpp-inv-gen: same checks against the C++ model and the generated C: PASS"
+	@./bin/cpp-inv-gen-bottle > /dev/null && echo "cpp-inv-gen: C++ model demo ran"
+	@OOPC_LIB=$(SHLIB_CPPINVGEN) $(PYTHON) python/test_oopc.py > /dev/null \
+	  && echo "cpp-inv-gen: unmodified Python binding against liboopc-cpp-inv-gen: PASS"
 
-test-inverted : test-cpp1 test-cpp2
+test-inverted : test-cpp-inv test-cpp-inv-gen
 	@echo "Inverted models: PASS"

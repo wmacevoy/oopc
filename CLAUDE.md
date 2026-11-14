@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.7).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
-wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v6`](docs/REQUIREMENTS_v6.md)
+wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v7`](docs/REQUIREMENTS_v7.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
 [`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
@@ -21,7 +21,7 @@ The C ABI is the interface. Every binding is written in its host language only:
 | layer | files | costs |
 |---|---|---|
 | C | `include/*.h`, `src/*.c` | one vtable pointer per object, one vtable + one Type per class |
-| C++ | `include/*.hpp` | zero extra bytes, no C++ vtable pointer |
+| C++ | `cpp/*.hpp` | zero extra bytes, no C++ vtable pointer |
 | Python | `python/oopc.py` | ctypes; no extension module |
 | JavaScript | `js/oopc.mjs` | wasm exports; no glue module |
 
@@ -37,7 +37,7 @@ make clean
 
 **The full check:** `make test` — the same one CI runs; success prints `All tests: PASS`.
 
-Every language has an assertion-based suite named `test_oopc` (`src/test_oopc.c`, `src/test_oopc.cpp`, `python/test_oopc.py`, `js/test_oopc.mjs`), and every check's label names the requirement it checks (`REQ2/OM-6`). `bin/cbottle` and `bin/cppbottle` are demos, run only to see they don't crash. A new check should be seen failing once before you trust it (SE1/T3). When you break and restore a file to do that, `make clean` afterwards: make's one-second timestamps can leave a stale object that still holds the break.
+Every language has an assertion-based suite named `test_oopc` (`src/test_oopc.c`, `cpp/test_oopc.cpp`, `python/test_oopc.py`, `js/test_oopc.mjs`), and every check's label names the requirement it checks (`REQ2/OM-6`). `bin/cbottle` and `bin/cppbottle` are demos, run only to see they don't crash. A new check should be seen failing once before you trust it (SE1/T3). When you break and restore a file to do that, `make clean` afterwards: make's one-second timestamps can leave a stale object that still holds the break.
 
 WebAssembly needs Emscripten, which CI installs — `make wasm && make test-js`. There is also a toolchain-free build: `make wasm-raw WASM_CC=<clang> WASI_SYSROOT=<sysroot>` targets wasm32 with the wasi-libc *headers* but links no libc, leaving `malloc`/`free` as imports the host supplies (see `js/load.mjs`). ~3.1 KB, runs in node and the browser with no shim, and `js/test_oopc.mjs` runs against whichever build is present.
 
@@ -77,7 +77,7 @@ Lifecycle is split so objects can live in caller-supplied storage — the C++ wr
 
 **Footgun:** a derived class's `fini` slot chains to the base with a direct, non-virtual call — `Bottle_vf_fini(base)`. Writing the natural-looking `Bottle_fini(me)` re-dispatches through the vtable, lands back in the same function, and recurses forever.
 
-### The C++ wrapper (`include/Bottle.hpp`, `include/SizedBottle.hpp`, namespace `cxx`)
+### The C++ wrapper (`cpp/Bottle.hpp`, `cpp/SizedBottle.hpp`, namespace `cxx`)
 
 The wrapper hierarchy **mirrors** the C layout rather than duplicating it. This is the part that is easy to get wrong — an earlier version embedded a C struct at *every* level, which produced two disjoint objects per instance, made base methods operate on an uninitialized one (segfault on first virtual call), and inflated `sizeof(cxx::SizedBottle)` to 40 vs. 24.
 
@@ -93,24 +93,24 @@ The rules, enforced by `static_assert` on size and alignment in each header:
 
 **Polymorphism works through `cxx::Bottle&`** — the override is selected by the C vtable, so there is no C++ vptr in the object. `~cxx::Bottle` is deliberately **non-virtual**; making it virtual would add a second vtable pointer on top of the C one and defeat the whole exercise. The cost: never `delete` a derived wrapper through a `cxx::Bottle*`. Use stack values and references, or heap-allocate through the C API (`Bottle_new`/`Bottle_delete`), which dispatches correctly.
 
-Adding a class means: `include/X.h` (vtable slots + declarations mirroring the base prefix), `src/X.c` (static impls, vtable wiring, dispatchers), `include/X.hpp` (the five rules above). All hand-written; nothing is generated.
+Adding a class means: `include/X.h` (vtable slots + declarations mirroring the base prefix), `src/X.c` (static impls, vtable wiring, dispatchers), `cpp/X.hpp` (the five rules above). All hand-written; nothing is generated.
 
-### The inverted models (`cpp1/`, `cpp2/`)
+### The inverted models (`cpp-inv/`, `cpp-inv-gen/`)
 
 Two experiments that run the repository backwards: **C++ is the source and the C
 ABI is the artifact**. Both emit the *same* symbols as `src/*.c`, so nothing
-downstream changes — `bin/cbottle1` and `bin/cbottle2` are the unmodified
+downstream changes — `bin/cbottle-cpp-inv` and `bin/cbottle-cpp-inv-gen` are the unmodified
 `src/cmain.c` linked against them, and `python/oopc.py` runs against
-`bin/liboopc1` / `bin/liboopc2` through the `OOPC_LIB` environment override.
+`bin/liboopc-cpp-inv` / `bin/liboopc-cpp-inv-gen` through the `OOPC_LIB` environment override.
 Each has its own README; read those before changing either.
 
 The point of both: the four invariants listed above under *The C object model*
 — mirrored vtable slots, mirrored struct fields, the hand-written downcast in
 every override, and the `Bottle_fini`/`Bottle_vf_fini` recursion footgun — are
-maintained by the compiler (`cpp1/`) or by the generator (`cpp2/`) instead of by
+maintained by the compiler (`cpp-inv/`) or by the generator (`cpp-inv-gen/`) instead of by
 a human.
 
-- **`cpp1/`** — header-only, C++17. `oopc::Slot` generates the slot thunks
+- **`cpp-inv/`** — header-only, C++17. `oopc::Slot` generates the slot thunks
   (a checked `static_cast` where the C writes `(SizedBottle*)base`),
   `oopc::Destroy` makes the fini slot call the most-derived destructor so C++
   chains automatically, and `oopc::Export` makes each `extern "C"` entry point
@@ -123,20 +123,19 @@ a human.
   body, so constructors must be defined out of line.
   Deliberate ABI delta: `Bottle_vftbl`/`SizedBottle_vftbl` are not exported.
 
-- **`cpp2/`** — `cpp2/oopcc.py`, a libclang generator. `cpp2/model/*.hpp` is
+- **`cpp-inv-gen/`** — `cpp-inv-gen/oopcc.py`, a libclang generator. `cpp-inv-gen/model/*.hpp` is
   ordinary polymorphic C++ (real `virtual`) that knows nothing about oopc;
-  the generator emits `cpp2/gen/*.{h,c}` in the exact shape of `src/Bottle.c`.
+  the generator emits `cpp-inv-gen/gen/*.{h,c}` in the exact shape of `src/Bottle.c`.
   It refuses anything outside the flattenable subset rather than emitting C that
-  quietly means something else — `cpp2/test_oopcc.py` has 27 refusal cases and
+  quietly means something else — `cpp-inv-gen/test_oopcc.py` has 27 refusal cases and
   6 acceptance cases, and every new subset rule needs a refusal test with it.
-  `cpp2/src/checks.inc` is compiled against both the model and the generated C (REQ4/INV-3), so a check added there holds both sides.
+  `cpp-inv-gen/src/checks.inc` is compiled against both the model and the generated C (REQ4/INV-3), so a check added there holds both sides.
   Body translation is cursor-based, not textual; the qualified/unqualified call
   distinction is what decides `Base_vf_f` versus the dispatcher.
 
-`pixi run make cpp1 cpp2 test-inverted` (pixi supplies libclang; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
-the `cxx::` wrapper stays at C++11. `bin/cpp2bottle` is built *without*
-`-Iinclude`, since `include/SizedBottle.hpp` and `cpp2/model/SizedBottle.hpp`
-share a basename and are different things.
+`pixi run make cpp-inv cpp-inv-gen test-inverted` (pixi supplies libclang; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
+the `cxx::` wrapper stays at C++11, and only `CXXFLAGS` carries `-Icpp`: `cpp/SizedBottle.hpp` and
+`cpp-inv-gen/model/SizedBottle.hpp` share a basename and are different things, so the C++17 builds must not see `cpp/`.
 
 ### Runtime types (`include/Type.h`)
 
@@ -146,7 +145,7 @@ share a basename and are different things.
 
 Every class exposes its Type two ways, deliberately: the `Class_type` object (for a derived class's static initializer), and `Class_getType()` (because a plain function is the one thing every FFI can reach — ctypes, raw wasm exports and Emscripten all differ on data symbols). For the same reason a host reads a `Type` through `Type_name`/`Type_parent`/`Type_size`, never by offset: the struct is 12 bytes on wasm32 and 24 on 64-bit targets. (Python's ctypes `Structure` is the exception; ctypes computes the layout for whatever platform it runs on.)
 
-Portability is a requirement (REQ3/RD-1, REQ2/BLD-1, REQ2/BLD-2): 64-bit native, 32-bit x86 (where `Bottle` is 12 bytes, not 16) and wasm32 are all targets, but `src/` and `include/` may not contain a per-target `#if` that changes behavior (the `__GNUC__` guard in `Trace.h` only turns on checks, and says so). Never write a size as a number; compare with `sizeof`.
+Portability is a requirement (REQ3/RD-1, REQ2/BLD-1, REQ2/BLD-2): 64-bit native, 32-bit x86 (where `Bottle` is 12 bytes, not 16) and wasm32 are all targets, but `src/`, `include/` and `cpp/` may not contain a per-target `#if` that changes behavior (the `__GNUC__` guard in `Trace.h` only turns on checks, and says so). Never write a size as a number; compare with `sizeof`.
 
 ### Tracing (`include/Trace.h`)
 
@@ -164,7 +163,7 @@ Neither binding has per-class C code. Adding a class means adding a C class and 
 
 ## CI
 
-`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp1/` and `cpp2/` through pixi on Linux and macOS at Python 3.9 and the newest; and a release job on `v*` tags. Artifacts upload per platform.
+`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp-inv/` and `cpp-inv-gen/` through pixi on Linux and macOS at Python 3.9 and the newest; and a release job on `v*` tags. Artifacts upload per platform.
 
 ## Known issues
 

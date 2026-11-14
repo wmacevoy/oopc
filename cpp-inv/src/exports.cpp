@@ -1,5 +1,5 @@
 /*
-  cpp-1: the C ABI, emitted from the C++ model.
+  cpp-inv: the C ABI, emitted from the C++ model.
 
   This file is the entire cost of the inversion, and it is worth looking at
   closely: one line per entry point, and each line is checked against the

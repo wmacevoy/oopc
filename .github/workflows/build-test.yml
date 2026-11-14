@@ -156,7 +156,7 @@ jobs:
       - name: Test JS binding
         run: make test-js
 
-  # REQ4/INV-4, REQ4/BLD-3: both inverted models, on GCC (Linux) and clang
+  # REQ4/INV-4, REQ7/BLD-3: both inverted models, on GCC (Linux) and clang
   # (macOS), at the Python floor and the newest. No lock file exists to cache
   # against, so each run resolves fresh.
   inverted:
@@ -182,7 +182,7 @@ jobs:
       - name: Test the inverted models
         run: |
           pixi run -e ${{ matrix.pixi-env }} make clean
-          pixi run -e ${{ matrix.pixi-env }} make cpp1 cpp2 test-inverted
+          pixi run -e ${{ matrix.pixi-env }} make cpp-inv cpp-inv-gen test-inverted
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

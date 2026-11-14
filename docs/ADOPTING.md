@@ -1,7 +1,7 @@
 # Adopting the pattern
 
 For someone copying this pattern into their own code. It lists what the pattern lets you get wrong
-(REQ4/ADP-1) and how to design an API that stays portable across hosts. What each piece does is in
+(REQ7/ADP-1) and how to design an API that stays portable across hosts. What each piece does is in
 the [README](../README.md); this page is what to watch for once the code is yours.
 
 This repository offers a pattern, not a production object system: validation beyond `Class_cast` and
@@ -12,12 +12,12 @@ thread-safety beyond `const` tables are yours to add.
 | Route | Your source | The compiler or generator keeps | You keep |
 | ----- | ----------- | ------------------------------- | -------- |
 | Hand-written C (`src/`) | C | function-pointer types | every footgun below |
-| Wrapper over C (`include/*.hpp`) | C, then C++ | sizes, by `static_assert` | the C footguns, plus the wrapper's |
-| Inverted, header-only (`cpp1/`) | C++17, no `virtual` | prefixes, casts, the fini chain | exceptions, trusting callers |
-| Inverted, generated (`cpp2/`) | ordinary C++ | prefixes, casts, the fini chain | exceptions, trusting callers, **drift** |
+| Wrapper over C (`cpp/*.hpp`) | C, then C++ | sizes, by `static_assert` | the C footguns, plus the wrapper's |
+| Inverted, header-only (`cpp-inv/`) | C++17, no `virtual` | prefixes, casts, the fini chain | exceptions, trusting callers |
+| Inverted, generated (`cpp-inv-gen/`) | ordinary C++ | prefixes, casts, the fini chain | exceptions, trusting callers, **drift** |
 | Inverted, handle (not built here) | ordinary C++ | everything behind the gateway | exceptions, trusting callers, one thin function per method |
 
-`cpp2/` is the most legible route, because its source is ordinary C++ and the C reads like the
+`cpp-inv-gen/` is the most legible route, because its source is ordinary C++ and the C reads like the
 hand-written version. **Adopt it with caution:** a generator can make its two sides disagree
 silently, and nothing about the output will look wrong.
 
@@ -91,17 +91,17 @@ with `Class_cast`. This is the first thing to fix.
 ### A C++ exception reaching an `extern "C"` entry point
 
 *What goes wrong:* on the inverted routes, an exception escaping into C or a host language may
-terminate the process or unwind through frames that cannot handle it. **Neither `cpp1/` nor `cpp2/`
+terminate the process or unwind through frames that cannot handle it. **Neither `cpp-inv/` nor `cpp-inv-gen/`
 guards against this**, and the examples here have no error channel.
 *Avoid it:* catch at every entry point, in one shared wrapper, and report through a convention: an
 `int` status with out-parameters, or null for a function returning an object. Or make sure no code
 behind the gateway can throw.
 
-### Drift between a generator's two sides (`cpp2/`)
+### Drift between a generator's two sides (`cpp-inv-gen/`)
 
 *What goes wrong:* the model and the generated C stop meaning the same thing, and the build stays
 green.
-*Avoid it:* see guideline 12. Run the same checks against both sides, as `cpp2/src/checks.inc` does.
+*Avoid it:* see guideline 12. Run the same checks against both sides, as `cpp-inv-gen/src/checks.inc` does.
 Here that is a requirement of the examples (REQ4/INV-3); for your code it is a guideline.
 
 ### A copy of this pattern going stale
@@ -136,9 +136,9 @@ These apply when C++ is the source and the C ABI is the gateway to other languag
 | 11 | Do not pass callbacks across the gateway unless you design them per host, and promise no thread-safety you have not built. | Each host differs. |
 | 12 | Run the same checks against both sides of the inversion, and run at least one non-C host through the gateway. | Drift is invisible otherwise. |
 
-### What `cpp2/` holds you to today
+### What `cpp-inv-gen/` holds you to today
 
-The [generator](../cpp2/README.md#the-subset) refuses input outside its subset, which enforces 6 and 8
+The [generator](../cpp-inv-gen/README.md#the-subset) refuses input outside its subset, which enforces 6 and 8
 and refuses overloads and default arguments (7). Three things differ from the guidelines above:
 
 - **Guideline 1 and 2, for parameters only.** It accepts `C *` and `const C *` for a model class, as a
