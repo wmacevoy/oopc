@@ -34,6 +34,42 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
   REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
   seen failing; ADOPTING lists the footgun.
 
+## 2026-11-14 — the proof, cut by two contracts; SizedBottle is not a Bottle under the strong reading
+
+- **What happened:** the client asked whether the proof demonstrates polymorphism. It demonstrated
+  dispatch for two classes, read together. Stating a contract for `Bottle` showed why it had not
+  been stated: the whole-program proof claims "a plain Bottle keeps what it is given" only when the
+  object is not a `SizedBottle`, which clamps. The contract every class keeps is weaker. With it,
+  seven proofs pass: both classes keep the caller's contract and a client holds from the contract
+  alone (`src/`, and `cpp-inv-gen/`'s output); each `Bottle` meets the extender's contract with no
+  derived class linked (`src/`, generated, and the contract's own stub); each `SizedBottle` is correct
+  over the stub with no `Bottle` linked (`src/`, generated). As a cross-check, the whole-program proof
+  also passes on the two mixed pairs the pieces imply. Seen refusing: the stand-in subclass without
+  the "setting what it holds" clause (the client's claim fails); a `setVolume` that halves; a
+  `Bottle_vf_setVolume` that stores `x + 1`; a `Bottle_setVolume` that does not dispatch; a
+  `Bottle_init` with volume 1; and a `SizedBottle` without its clamp, over the stub.
+- **Kind:** K3 for the unstated contract: two classes that pass every test, and no sentence anywhere
+  saying what a caller may rely on.
+- **Cost:** two hours.
+- **Findable by:** trying to write the contract down.
+- **Changed:** REQ10/PRF-5 and PRF-6; `proof/contract.h` and three more proof files; `make prove` runs
+  them. The Rust rows of the mix are tested and not proved (deferred in REQUIREMENTS_v10).
+
+## 2026-11-14 — nine pairings of Bottle and SizedBottle across C, C++ and Rust all pass
+
+- **What happened:** the client asked that a class in one language be extendable in another, as a
+  test. Six pairings needed no new source: a `Bottle` from `src/`, from `cpp-inv-gen/`'s output or
+  from `rust-inv/` (built without its `SizedBottle`), under the `SizedBottle` of `src/` or of
+  `cpp-inv-gen/`. The Rust `SizedBottle` row needed a test-only file, because `rust-inv/`'s own is
+  compiled against its Rust base; `cpp-inv/` is welded the same way and takes no part. All nine pass
+  the unmodified C suite. Seen failing: with the clamp removed from the test-only Rust `SizedBottle`,
+  its row failed; with the Rust `Bottle` storing nothing, the Rust-Bottle rows failed.
+- **Kind:** K1.
+- **Cost:** about an hour. It was that cheap only because the suite had begun naming the protected
+  layer the same day.
+- **Findable by:** linking it.
+- **Changed:** REQ10/INV-6; `make test-mix`, run by `test-inverted` and so by CI.
+
 ## 2026-11-14 — `cpp-inv/` now exports the `Class_vf_*` functions
 
 - **What happened:** the client decided the open question below: `cpp-inv/` should export them. The

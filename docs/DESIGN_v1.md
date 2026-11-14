@@ -1,6 +1,6 @@
 # Design — v1
 
-How the requirements in [REQUIREMENTS_v9](REQUIREMENTS_v9.md) are met, and what was rejected. The
+How the requirements in [REQUIREMENTS_v10](REQUIREMENTS_v10.md) are met, and what was rejected. The
 mechanism itself — layout rules, the five wrapper rules, the fini footgun — is in
 [`CLAUDE.md`](../CLAUDE.md#architecture), which stays the one place it is written
 ([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.7/guide/05-design.md#d6)). This
@@ -117,12 +117,25 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
   (REQ8/BLD-5): the object is linked by the clang that builds `src/Type.c` for wasm, exactly as the
   raw wasm build links its C.
 
+- **Extension across languages is by name, and is a test** — REQ10/INV-6 — nine links of the C suite
+  need no new example; the Rust `SizedBottle` over a foreign base is test-only and transcribes
+  `src/SizedBottle.c` — rejected: making `rust-inv/sized_bottle.rs` or `cpp-inv/` reach their base
+  through the ABI (it gives up what those routes are for: the compiler keeping the prefix and the
+  fini chain) — source: client, 2026-11-14 ("not an example, just a test"); the choice of what stands
+  for C++ and Rust is the agent's *(inferred)*.
 - **The proof is a harness in C for a bounded model checker** — REQ9/PRF-1, REQ9/PRF-3 — it reads
   like the C suite, needs no annotation in `src/`, runs in seconds, and gives a counterexample;
   its assumptions are three lines — rejected: contracts in `src/` for a deductive verifier (no bound,
   but the annotations would outweigh the code a student came to read), a proof assistant (a second
   model of the code to keep in step) — source: client, 2026-11-14 ("bounded reasoning", "plain finite
   numbers only in the K4s"); the choice of CBMC is the agent's *(inferred)*.
+- **The proof is cut by two contracts, a caller's and an extender's** — REQ10/PRF-5, REQ10/PRF-6 —
+  a client is proved once for every subclass, and a derived class once for every base; pairings are
+  never proved, so the cost grows by addition and not by multiplication — rejected: one contract per
+  class (the caller's must be weak enough for a clamping subclass, the extender's must be exact, and
+  one text cannot be both) — source: client, 2026-11-14 ("if bottle is correct, I only need to
+  show…"; "the only way to win"); the three clauses of the caller's contract are the agent's
+  *(inferred)*.
 - **The invariant also gets an inductive step** — REQ9/PRF-2 — any state that satisfies it, one call:
   that removes the bound for the one claim where history matters — source: this session.
 

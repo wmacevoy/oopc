@@ -17,6 +17,10 @@
 use core::ffi::{c_char, c_void};
 
 pub mod bottle;
+/* `--cfg bottle_only` leaves SizedBottle out, so another language can supply
+   it: make test-mix links this Bottle under a SizedBottle written in C or
+   generated from C++. */
+#[cfg(not(bottle_only))]
 pub mod sized_bottle;
 
 /* include/Type.h's struct TypeStruct. */

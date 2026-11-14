@@ -70,7 +70,7 @@ $(SHLIB) : $(OBJS)
 .PHONY: all clean test test-c test-cpp test-python test-js wasm wasm-raw wasm-debug emcc-build \
         cpp-inv cpp-inv-gen gen test-cpp-inv test-cpp-inv-gen test-inverted \
         rust test-rust rust-inv test-rust-inv rust-inv-wasm test-rust-inv-wasm \
-        prove prove-src prove-cpp-inv-gen
+        prove prove-src prove-cpp-inv-gen prove-contracts test-mix
 
 all : bin/cbottle bin/cppbottle $(SHLIB)
 
@@ -382,8 +382,69 @@ prove-cpp-inv-gen : proof/oopc_proof.c $(CPPINVGEN_GEN) src/Type.c src/Trace.c
 	@grep -q "^VERIFICATION SUCCESSFUL" tmp/prove-cpp-inv-gen.out
 	@echo "prove: cpp-inv-gen/gen/: $$(grep -c ': SUCCESS$$' tmp/prove-cpp-inv-gen.out) properties, 0 failed, any $(PROOF_STEPS) calls: PASS"
 
-prove : prove-src prove-cpp-inv-gen
+# The proof in pieces (proof/contract.h, REQ10/PRF-5 and PRF-6).  Each class
+# keeps the caller's contract and a client is proved from that contract alone;
+# each Bottle meets the extender's contract and each SizedBottle is proved over
+# proof/bottle_contract.c in place of a Bottle.  No pairing is proved here:
+# that is the point.
+prove-contracts : $(wildcard proof/*.c proof/*.h) $(CPPINVGEN_GEN) $(WASM_SRCS)
+	@command -v $(CBMC) > /dev/null || { echo "no model checker '$(CBMC)'; install CBMC or set CBMC=<path>"; exit 1; }
+	@run() { what="$$1"; shift; \
+	    $(CBMC) "$$@" -Iproof $(CBMCFLAGS) > tmp/prove-contracts.out 2>&1 \
+	      || { grep -E "FAILURE|ERROR|error" tmp/prove-contracts.out; echo "prove: $$what: FAILED (see tmp/prove-contracts.out)"; exit 1; }; \
+	    echo "prove: $$what: $$(grep -c ': SUCCESS$$' tmp/prove-contracts.out) properties, 0 failed: PASS"; }; \
+	  T="src/Type.c src/Trace.c"; G=cpp-inv-gen/gen; \
+	  run "caller's contract: src/ keeps it, and a client holds from it alone" \
+	      proof/caller_contract.c $$T src/Bottle.c src/SizedBottle.c -Iinclude && \
+	  run "caller's contract: cpp-inv-gen/gen/ keeps it" \
+	      proof/caller_contract.c $$T $$G/Bottle.c $$G/SizedBottle.c -I$$G -Iinclude && \
+	  run "extender's contract: src/Bottle.c meets it" \
+	      proof/extender_contract.c $$T src/Bottle.c -Iinclude && \
+	  run "extender's contract: cpp-inv-gen/gen/Bottle.c meets it" \
+	      proof/extender_contract.c $$T $$G/Bottle.c -I$$G -Iinclude && \
+	  run "extender's contract: proof/bottle_contract.c meets it" \
+	      proof/extender_contract.c $$T proof/bottle_contract.c -Iinclude && \
+	  run "src/SizedBottle.c over the contract, with no Bottle" \
+	      proof/oopc_proof.c proof/bottle_contract.c src/SizedBottle.c $$T -Iinclude && \
+	  run "cpp-inv-gen/gen/SizedBottle.c over the contract, with no Bottle" \
+	      proof/oopc_proof.c proof/bottle_contract.c $$G/SizedBottle.c $$T -I$$G -Iinclude
+
+prove : prove-src prove-cpp-inv-gen prove-contracts
 	@echo "Proof: PASS"
 
-test-inverted : test-cpp-inv test-cpp-inv-gen test-rust-inv
+# ===========================================================================
+# test-mix -- a class in one language, extended in another (REQ10/INV-6).
+#
+# A Bottle from C, from C++ (the C that cpp-inv-gen generates) or from Rust,
+# under a SizedBottle from each of the three: nine programs, each the
+# unmodified C suite, which also derives its own classes from the result.
+# A test, not an example: the Rust SizedBottle that can sit over a foreign
+# Bottle is rust-inv/test_sized_over_abi.rs, and `--cfg bottle_only` builds
+# rust-inv with its own SizedBottle left out.
+# ===========================================================================
+
+RUSTOBJ=$(RUSTC) $(RUSTFLAGS) --crate-type=lib --emit=obj -O -C panic=abort -C relocation-model=pic
+
+tmp/rust-inv_Bottle.o : $(RUSTINV_SRCS)
+	$(RUSTOBJ) --cfg bottle_only --check-cfg 'cfg(bottle_only)' -o $@ $<
+
+tmp/rust-inv_SizedBottle.o : rust-inv/test_sized_over_abi.rs
+	$(RUSTOBJ) -o $@ $<
+
+MIX_BOTTLES=C:tmp/Bottle.o C++:tmp/cpp-inv-gen_Bottle.o Rust:tmp/rust-inv_Bottle.o
+MIX_SIZED=C:tmp/SizedBottle.o C++:tmp/cpp-inv-gen_SizedBottle.o Rust:tmp/rust-inv_SizedBottle.o
+
+test-mix : tmp/test_oopc.o tmp/Type.o tmp/Trace.o \
+           tmp/Bottle.o tmp/cpp-inv-gen_Bottle.o tmp/rust-inv_Bottle.o \
+           tmp/SizedBottle.o tmp/cpp-inv-gen_SizedBottle.o tmp/rust-inv_SizedBottle.o
+	@for b in $(MIX_BOTTLES); do for s in $(MIX_SIZED); do \
+	  what="mix: Bottle in $${b%%:*}, SizedBottle in $${s%%:*}"; \
+	  $(CC) $(CFLAGS) -o bin/test_c-mix tmp/test_oopc.o $${b#*:} $${s#*:} tmp/Type.o tmp/Trace.o \
+	    || { echo "$$what: does not link"; exit 1; }; \
+	  ./bin/test_c-mix > tmp/test_c-mix.out \
+	    || { echo "$$what: FAILED"; cat tmp/test_c-mix.out; exit 1; }; \
+	  echo "$$what: unmodified C suite: PASS"; \
+	done; done
+
+test-inverted : test-cpp-inv test-cpp-inv-gen test-rust-inv test-mix
 	@echo "Inverted models: PASS"
