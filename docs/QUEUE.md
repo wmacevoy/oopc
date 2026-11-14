@@ -14,9 +14,9 @@ Nothing enters without a *done* sentence that can be checked from outside. Only 
 | 1 | Make the C and C++ suites assert behaviour, not just exit 0 | REQ2/OM-1, REQ2/OM-6, REQ2/TY-2, REQ2/CXX-3 | agent | with the clamp in `src/SizedBottle.c` removed, `make test-c` and `make test-cpp` each fail ([FINDINGS](FINDINGS.md)) | time box: half a day | review | 2026-10-26 |
 | 2 | Name requirement IDs in the tests | chore | agent | every check in the four `test_oopc` suites names the `REQ2/…` it checks, except Python's context-manager check, which no requirement covers | range: 1–2 h | review | 2026-10-26 |
 | 3 | Confirm the *(inferred)* requirements with the client | all of REQUIREMENTS_v1 | Warren | REQUIREMENTS_v2 agreed | time box: 30 min | review | 2026-10-26 |
-| 5 | See each `static_assert` fire once | REQ2/CXX-1, REQ2/OM-3 | agent | a note in FINDINGS that each size/align assert and the mistyped-slot error was seen red | time box: 1 h | review | 2026-11-09 |
+| 5 | See each `static_assert` fire once | REQ2/CXX-1, REQ2/OM-3 | agent | a note in FINDINGS that each size/align assert and the mistyped-slot error was seen red | time box: 1 h | done | 2026-11-14 |
 | 6 | Check the layering rule | chore | — | a check fails when a layer-1 file includes a layer-3 one (DESIGN_v1, Components) | time box: 1 h | ready | 2026-10-26 |
-| 7 | Fail the raw wasm build over the size limit | REQ6/BND-4 | agent | nothing to build: REQ6/BND-4 has no size limit | — | review | 2026-11-09 |
+| 7 | Fail the raw wasm build over the size limit | REQ6/BND-4 | agent | nothing to build: REQ6/BND-4 has no size limit | — | done | 2026-11-14 |
 | 8 | `WASI_SYSROOT` defaults to a Homebrew path | chore | agent | `make wasm-raw` with a missing `WASI_SYSROOT` says what to set, instead of a compiler error | range: 15–30 min | review | 2026-10-26 |
 | 9 | Exceptions across the inverted models' entry points — also needs an error channel the C ABI does not have | REQ2/INV-1 | — | every `extern "C"` entry in `cpp1/` and `cpp2/` is `noexcept` or translates, and a test throws through one | range: 1–2 days | blocked: deferred in REQUIREMENTS_v6 | 2026-10-26 |
 | 10 | `align` in `Type` | REQ2/TY-3 | — | a host allocating from `Type` honours an over-aligned class | range: half a day | blocked: deferred in REQUIREMENTS_v6 | 2026-10-26 |
