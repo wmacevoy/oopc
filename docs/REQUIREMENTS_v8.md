@@ -7,14 +7,14 @@ Supersedes [v7](REQUIREMENTS_v7.md); IDs keep their meaning across versions, and
 retired rather than reused. Cite each requirement with the version that last changed it: `REQ8/BLD-5`,
 but still `REQ7/SHAPE-2` and `REQ2/OM-6`.
 
-Client and proxy for adopters and students: Warren MacEvoy · Directed by the client 2026-11-14; not
-yet agreed · *Tell us what is wrong with it.*
+Client and proxy for adopters and students: Warren MacEvoy · Date agreed: 2026-11-14 · *Tell us what
+is wrong with it.*
 
 **What changed from v7:** the client asked for a wasm build of the Rust, and for a self-test of the
 class in the Rust constructor. BLD-5 is new: `rust-inv/` builds for wasm32 and passes the JS suite.
 RS-5 is new: a Rust constructor refuses an object of another class. BLD-3 changed to say where the
 wasm build's compiler comes from, and the operating envelope, the inputs table and one deferred item
-follow. Nothing else changed.
+follow. Nothing else changed. Directed and agreed by the client, 2026-11-14.
 
 **What changed from v6 (in v7):** the client asked for Rust in both directions, and for directories named
 language first. SHAPE-2 now speaks of a language, shown for C++ and Rust, and no longer of C++ alone;
@@ -264,7 +264,7 @@ a pattern shown to be understood, and the first thing an adopter must fix for pr
 - "When teaching and use as a library conflict, the pattern wins." — confirmed, 2026-11-09
 - "A wasm build of the Rust means `rust-inv/` as a raw wasm module under the JS suite. `rust/`, the
   binding, is not built for wasm: its suite would need a WASI runtime. Neither is built for 32-bit
-  x86." — not yet confirmed
+  x86." — confirmed, 2026-11-14: wasm is for `rust-inv/` only, one way; no Rust binding in wasm
 - "A Rust owner that costs one pointer and a C allocation is acceptable, where the C++ wrapper costs
   nothing." — confirmed, 2026-11-14
 - "`rust-inv/` need not trace, and needs no Rust-side demo: the suites of the other languages are its
