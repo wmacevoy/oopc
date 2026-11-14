@@ -21,9 +21,11 @@ Reasons cite the commit that stated them; reasons with no source are marked *(in
 | `cpp/*.hpp` (`cxx::`) | 3 | C++11 | zero-overhead wrapper | none of its own |
 | `python/oopc.py` | 3 | Python | ctypes binding | none of its own |
 | `js/oopc.mjs`, `js/load.mjs` | 3 | JS | wasm binding; loader | none of its own |
+| `rust/oopc.rs` | 3 | Rust | views and owners over the C ABI | one pointer per owner |
 | `src/cmain.c`, `cpp/cppmain.cpp` | 4 | demo | prints the mechanism | — |
 | `cpp-inv/` | 1–2 alt | C++17 | emits the layer-1/2 ABI from headers | per object |
 | `cpp-inv-gen/` | 1–2 alt | Python + libclang | emits `cpp-inv-gen/gen/*.{h,c}` from `cpp-inv-gen/model/` | per object |
+| `rust-inv/` | 1–2 alt | Rust, `#![no_std]` | emits the layer-1/2 ABI as one object file | per object |
 
 A component depends only on lower layers. Nothing checks this
 ([QUEUE](QUEUE.md) #6).
@@ -34,7 +36,8 @@ A component depends only on lower layers. Nothing checks this
 | ----- | --------------------- | ------ | ------------- | -------------------------- |
 | object fields (`volume`, `maxVolume`) | the C object | none — every wrapper and binding reads through the C functions | — | — |
 | vtable, `Type` | `static const` in the class's `.c` | none | — | — |
-| the struct layouts | `include/*.h` | `cxx::` reserved bytes; `cpp-inv/`, `cpp-inv-gen/gen/`; Python's ctypes `Type` | until a rebuild | `static_assert` fails (C++); the C suite fails (inverted models) |
+| the struct layouts | `include/*.h` | `cxx::` reserved bytes; `cpp-inv/`, `cpp-inv-gen/gen/`, `rust-inv/`; Python's ctypes `Type` | until a rebuild | `static_assert` fails (C++); the C suite fails (inverted models) |
+| the function signatures | `include/*.h` | Python's ctypes declarations; the `extern` block in `rust/oopc.rs` | until edited by hand | nothing: a wrong one is undefined behavior (ADOPTING) |
 | trace sink | `src/Trace.c` | none | — | — |
 
 ## Essential complexity
@@ -94,6 +97,22 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
   `src/` are plain C only, C++ sits beside `python/` and `js/` as one more language at the gateway,
   and a listing groups each language's routes (`cpp`, `cpp-inv`, `cpp-inv-gen`, `rust`, `rust-inv`)
   — rejected: `invcpp`, `autoinvcpp` (scatter in a listing) — source: client, 2026-11-14.
+- **A Rust class is a zero-sized view; `Owned<T>` holds the pointer** — REQ7/RS-1, REQ7/RS-3 — a
+  view with no bytes cannot be swapped or replaced by safe code — rejected: a `#[repr(C)]` struct the
+  size of the C object, in place, as the C++ wrapper does (safe `mem::swap` slices it;
+  [FINDINGS](FINDINGS.md) 2026-11-14); cost: one pointer and a C allocation per owner — source: this
+  session's trial; the client has not yet confirmed the cost (REQUIREMENTS_v7, Assumptions).
+- **`Owned<T>` drops through `Bottle_delete`** — REQ7/RS-2 — the C dispatcher finalizes the dynamic
+  class, so an owner of the base may hold a derived object; the C++ wrapper cannot offer that without
+  a second vtable pointer — source: `rust/oopc.rs`.
+- **`rust-inv/` is hand-written, with no macro** — REQ7/INV-5, REQ4/SHAPE-5 — each slot is one plain
+  line, and the downcast is written once per class — rejected: `macro_rules!` thunks (shorter, harder
+  to read beside `src/`), a procedural macro (crates; output unseen) — source: this session
+  *(inferred: the client asked for the route, not the mechanism)*.
+- **`rust-inv/` builds to one object file** — REQ7/INV-5, REQ7/BLD-3 — it links like a C object on
+  every platform with the Makefile's existing rules — rejected: a `staticlib` (needs a per-platform
+  whole-archive flag for the shared library, and bundles `core`), a `cdylib` (does not export the C
+  objects linked into it) — source: this session's trial.
 
 ## Deferred
 

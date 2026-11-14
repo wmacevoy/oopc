@@ -68,7 +68,8 @@ $(SHLIB) : $(OBJS)
 	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^
 
 .PHONY: all clean test test-c test-cpp test-python test-js wasm wasm-raw wasm-debug emcc-build \
-        cpp-inv cpp-inv-gen gen test-cpp-inv test-cpp-inv-gen test-inverted
+        cpp-inv cpp-inv-gen gen test-cpp-inv test-cpp-inv-gen test-inverted \
+        rust test-rust rust-inv test-rust-inv
 
 all : bin/cbottle bin/cppbottle $(SHLIB)
 
@@ -248,5 +249,76 @@ test-cpp-inv-gen : bin/cbottle bin/cbottle-cpp-inv-gen bin/cpp-inv-gen-bottle bi
 	@OOPC_LIB=$(SHLIB_CPPINVGEN) $(PYTHON) python/test_oopc.py > /dev/null \
 	  && echo "cpp-inv-gen: unmodified Python binding against liboopc-cpp-inv-gen: PASS"
 
-test-inverted : test-cpp-inv test-cpp-inv-gen
+# ===========================================================================
+# rust -- Rust over the C ABI, the way cpp/ is C++ over it.
+#
+# rust/oopc.rs is the whole binding.  Bare rustc: no cargo project, no crates.
+# The suite links the same objects the C and C++ suites do.
+# ===========================================================================
+
+RUSTC?=rustc
+# rustc's default edition is 2015; c"..." literals need 2021.
+RUSTFLAGS=--edition 2021 -g
+
+# The C objects reach rustc as a static library, not as bare link arguments:
+# rustc puts a library before libc on the link line and a bare argument after
+# it, and on Linux arm64 an object placed after libc cannot find the stack
+# protector's guard (FINDINGS 2026-11-14).
+tmp/liboopc.a : $(OBJS)
+	rm -f $@ && $(AR) rcs $@ $^
+
+bin/test_rust : rust/test_oopc.rs rust/oopc.rs tmp/liboopc.a
+	$(RUSTC) $(RUSTFLAGS) -o $@ $< -L native=tmp -l static=oopc
+
+rust : bin/test_rust
+
+test-rust : bin/test_rust
+	@./bin/test_rust > tmp/test_rust.out || { cat tmp/test_rust.out; exit 1; }
+	@echo "Rust test: PASS"
+
+# ===========================================================================
+# rust-inv -- Rust is the source, the C ABI is the artifact.
+#
+# One object file, no std, linked exactly like tmp/Bottle.o + tmp/SizedBottle.o.
+# -O so the few core functions used are inlined: the object then needs nothing
+# from Rust's libraries, only malloc, free and Type_cast.  panic=abort because
+# nothing here can unwind into C.  Same proofs as cpp-inv, plus rust/'s own
+# suite: Rust, through the C ABI, over Rust.
+# ===========================================================================
+
+RUSTINV_SRCS=rust-inv/oopc.rs rust-inv/bottle.rs rust-inv/sized_bottle.rs
+RUSTINV_OBJS=tmp/rust-inv.o tmp/Type.o tmp/Trace.o
+SHLIB_RUSTINV=bin/liboopc-rust-inv.$(SHLIB_EXT)
+
+tmp/rust-inv.o : $(RUSTINV_SRCS)
+	$(RUSTC) $(RUSTFLAGS) --crate-type=lib --emit=obj -O -C panic=abort -C relocation-model=pic -o $@ $<
+
+bin/cbottle-rust-inv : tmp/cmain.o $(RUSTINV_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+bin/test_c-rust-inv : tmp/test_oopc.o $(RUSTINV_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+tmp/liboopc-rust-inv.a : $(RUSTINV_OBJS)
+	rm -f $@ && $(AR) rcs $@ $^
+
+bin/test_rust-rust-inv : rust/test_oopc.rs rust/oopc.rs tmp/liboopc-rust-inv.a
+	$(RUSTC) $(RUSTFLAGS) -o $@ $< -L native=tmp -l static=oopc-rust-inv
+
+$(SHLIB_RUSTINV) : $(RUSTINV_OBJS)
+	$(CC) $(CFLAGS) $(SHARED_FLAG) -o $@ $^
+
+rust-inv : bin/cbottle-rust-inv bin/test_c-rust-inv bin/test_rust-rust-inv $(SHLIB_RUSTINV)
+
+test-rust-inv : bin/cbottle bin/cbottle-rust-inv bin/test_c-rust-inv bin/test_rust-rust-inv $(SHLIB_RUSTINV)
+	@./bin/test_c-rust-inv > tmp/test_c-rust-inv.out || { cat tmp/test_c-rust-inv.out; exit 1; }
+	@echo "rust-inv: unmodified C suite: PASS"
+	@./bin/cbottle > tmp/c.out && ./bin/cbottle-rust-inv > tmp/c-rust-inv.out
+	@diff tmp/c.out tmp/c-rust-inv.out && echo "rust-inv: the C demo is byte-identical against the Rust build"
+	@./bin/test_rust-rust-inv > tmp/test_rust-rust-inv.out || { cat tmp/test_rust-rust-inv.out; exit 1; }
+	@echo "rust-inv: unmodified Rust binding over the Rust build: PASS"
+	@OOPC_LIB=$(SHLIB_RUSTINV) $(PYTHON) python/test_oopc.py > /dev/null \
+	  && echo "rust-inv: unmodified Python binding against liboopc-rust-inv: PASS"
+
+test-inverted : test-cpp-inv test-cpp-inv-gen test-rust-inv
 	@echo "Inverted models: PASS"

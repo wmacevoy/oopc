@@ -14,7 +14,7 @@ wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v7`](doc
 
 ## What this project is
 
-A teaching demo of single-inheritance object orientation in plain C, wrapped so the *same* hierarchy appears natively in C++, Python and JavaScript with **no per-class glue in any of them**. `Bottle` is the base, `SizedBottle` the derived class; the domain is deliberately trivial so nothing distracts from the mechanism.
+A teaching demo of single-inheritance object orientation in plain C, wrapped so the *same* hierarchy appears natively in C++, Rust, Python and JavaScript with **no per-class glue in any of them**. `Bottle` is the base, `SizedBottle` the derived class; the domain is deliberately trivial so nothing distracts from the mechanism.
 
 The C ABI is the interface. Every binding is written in its host language only:
 
@@ -22,6 +22,7 @@ The C ABI is the interface. Every binding is written in its host language only:
 |---|---|---|
 | C | `include/*.h`, `src/*.c` | one vtable pointer per object, one vtable + one Type per class |
 | C++ | `cpp/*.hpp` | zero extra bytes, no C++ vtable pointer |
+| Rust | `rust/oopc.rs` | a view owns no bytes; an owner is one pointer; no crate |
 | Python | `python/oopc.py` | ctypes; no extension module |
 | JavaScript | `js/oopc.mjs` | wasm exports; no glue module |
 
@@ -33,6 +34,8 @@ Two measurable goals, both enforced by `static_assert` rather than by convention
 make all          # bin/cbottle, bin/cppbottle, bin/liboopc.<dylib|so>
 make test         # C, C++, Python  (test-c / test-cpp / test-python individually)
 make clean
+
+pixi run make test-rust test-inverted   # Rust over C; C++ and Rust as the source
 ```
 
 **The full check:** `make test` — the same one CI runs; success prints `All tests: PASS`.
@@ -95,10 +98,10 @@ The rules, enforced by `static_assert` on size and alignment in each header:
 
 Adding a class means: `include/X.h` (vtable slots + declarations mirroring the base prefix), `src/X.c` (static impls, vtable wiring, dispatchers), `cpp/X.hpp` (the five rules above). All hand-written; nothing is generated.
 
-### The inverted models (`cpp-inv/`, `cpp-inv-gen/`)
+### The inverted models (`cpp-inv/`, `cpp-inv-gen/`, `rust-inv/`)
 
-Two experiments that run the repository backwards: **C++ is the source and the C
-ABI is the artifact**. Both emit the *same* symbols as `src/*.c`, so nothing
+Three routes that run the repository backwards: **another language is the source and the C
+ABI is the artifact**. The two C++ ones come first; `rust-inv/` is at the end of this section. Both C++ routes emit the *same* symbols as `src/*.c`, so nothing
 downstream changes — `bin/cbottle-cpp-inv` and `bin/cbottle-cpp-inv-gen` are the unmodified
 `src/cmain.c` linked against them, and `python/oopc.py` runs against
 `bin/liboopc-cpp-inv` / `bin/liboopc-cpp-inv-gen` through the `OOPC_LIB` environment override.
@@ -133,9 +136,33 @@ a human.
   Body translation is cursor-based, not textual; the qualified/unqualified call
   distinction is what decides `Base_vf_f` versus the dispatcher.
 
-`pixi run make cpp-inv cpp-inv-gen test-inverted` (pixi supplies libclang; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
+- **`rust-inv/`** — `bottle.rs` and `sized_bottle.rs`, hand-written Rust in the
+  shape of `src/*.c`, built by bare `rustc` into **one object file**
+  (`tmp/rust-inv.o`) that links like a C object. `#![no_std]`, and `-O` matters:
+  it inlines the few `core` functions used, so the object's only undefined
+  symbols are `malloc`, `free` and `Type_cast`. An undefined `core::…` symbol at
+  link time means something was added that needs Rust's libraries. The prefixes
+  are kept by `#[repr(C)]` with the base as the first field (object and vtable
+  alike), an inherited slot by `..Bottle_vftbl`, and the fini chain by
+  `drop_in_place`. The downcast is still written by hand, once per class
+  (`me`/`me_mut`). The object's `vftbl` field is a **raw pointer**, not a
+  reference: it is cast back to the derived table, and a reference to the base
+  table would not cover the longer one. It does not trace.
+
+`pixi run make cpp-inv cpp-inv-gen rust-inv test-inverted` (pixi supplies libclang and rustc; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
 the `cxx::` wrapper stays at C++11, and only `CXXFLAGS` carries `-Icpp`: `cpp/SizedBottle.hpp` and
 `cpp-inv-gen/model/SizedBottle.hpp` share a basename and are different things, so the C++17 builds must not see `cpp/`.
+
+### The Rust binding (`rust/oopc.rs`)
+
+Rust over the C ABI, the way `cpp/` is C++ over it; one file, built by bare `rustc --edition 2021` (the default edition is 2015). Two idioms stand in for inheritance:
+
+- **A class is a view that owns no bytes.** `&Bottle` is the C `Bottle *`. `SizedBottle` derefs to `Bottle`, which is the upcast. The view is zero-sized **on purpose**: with a `Bottle` the size of the C struct, safe code can `mem::swap` two `&mut Bottle` and exchange vtable pointers between a `Bottle` and a `SizedBottle` (REQ7/RS-3; seen, FINDINGS 2026-11-14). Never give a view a field with a size.
+- **`Owned<T>` is one pointer to an object C allocated.** Dropping it calls `Bottle_delete`, which dispatches, so an `Owned<Bottle>` holding a `SizedBottle` is finalized correctly — unlike `delete` through a `cxx::Bottle*`.
+
+The `extern "C"` block restates the C signatures by hand and nothing checks it against `include/*.h`. A view needs the `[u8; 0]` field as well as the `PhantomData` marker: a struct of `PhantomData` alone trips rustc's `improper_ctypes` lint. A block comment in Rust nests, so `include/*.h` inside one opens a comment that never closes.
+
+`rust/test_oopc.rs` links the same objects as the C suite, and `make test-rust-inv` links it against `rust-inv/` too.
 
 ### Runtime types (`include/Type.h`)
 
@@ -163,7 +190,7 @@ Neither binding has per-class C code. Adding a class means adding a C class and 
 
 ## CI
 
-`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp-inv/` and `cpp-inv-gen/` through pixi on Linux and macOS at Python 3.9 and the newest; and a release job on `v*` tags. Artifacts upload per platform.
+`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp-inv/`, `cpp-inv-gen/`, `rust/` and `rust-inv/` through pixi on Linux and macOS at Python 3.9 and the newest; and a release job on `v*` tags. Artifacts upload per platform.
 
 ## Known issues
 

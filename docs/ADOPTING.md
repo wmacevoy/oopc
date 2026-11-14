@@ -16,6 +16,9 @@ thread-safety beyond `const` tables are yours to add.
 | Inverted, header-only (`cpp-inv/`) | C++17, no `virtual` | prefixes, casts, the fini chain | exceptions, trusting callers |
 | Inverted, generated (`cpp-inv-gen/`) | ordinary C++ | prefixes, casts, the fini chain | exceptions, trusting callers, **drift** |
 | Inverted, handle (not built here) | ordinary C++ | everything behind the gateway | exceptions, trusting callers, one thin function per method |
+| Binding over C (`rust/`) | C, then Rust | nothing across the boundary; Rust's rules on its own side | the `extern` declarations, and keeping views zero-sized |
+| Inverted, hand-written (`rust-inv/`) | Rust, `#![no_std]` | prefixes, inherited slots, the fini chain | one downcast per class, trusting callers |
+| Inverted, attribute macro (not built here) | ordinary Rust | everything `rust-inv/` writes by hand | the macro, and two crates to build it |
 
 `cpp-inv-gen/` is the most legible route, because its source is ordinary C++ and the C reads like the
 hand-written version. **Adopt it with caution:** a generator can make its two sides disagree
@@ -43,6 +46,17 @@ the host. It does not show the mechanism, so it is not what this repository teac
 
 **Keep a C++ exception out of it with one wrapper**, not a `try` in each function: in the code this
 route came from, the per-function version missed some.
+
+### The Rust attribute-macro route
+
+`rust-inv/` is to Rust what `cpp-inv/` is to C++: the ABI is written out, and the compiler keeps the
+prefixes. The automatic form, the counterpart of `cpp-inv-gen/`, would be a procedural macro: an
+attribute such as `#[class(extends = Bottle)]` on a plain struct and its `impl`, which emits the
+`#[repr(C)]` layout, the vtable, the slots and the `#[no_mangle]` dispatchers. It is not built here
+because it needs a cargo project and a parser crate, and because its output is Rust a reader never
+sees, where `cpp-inv-gen/` emits C you can read beside `src/`. A generator from Rust to C in the
+shape of `cpp-inv-gen/` is not practical: Rust has no class hierarchy to read, and its method bodies
+are not nearly C the way that C++ subset is.
 
 ## Footguns
 
@@ -81,6 +95,32 @@ second vtable pointer. Deleting a derived wrapper through a base pointer is unde
 *Avoid it:* use stack values and references, or allocate through the C API (`Bottle_new` and
 `Bottle_delete`), which dispatches correctly.
 
+### A Rust type that owns the object's bytes
+
+*What goes wrong:* if the Rust `Bottle` is a struct the size of the C one, safe code holding two
+`&mut Bottle` can `std::mem::swap` them. When one is really a `SizedBottle`, that exchanges two
+vtable pointers between objects of different sizes: slicing, with no `unsafe` in sight. In a trial
+the swapped objects reported each other's class, and the clamp stopped working.
+*Avoid it:* make the Rust type a view with no bytes (`rust/oopc.rs`), and hold the object through a
+pointer. A swap of two views then moves nothing. Assert `size_of::<View>() == 0` at compile time.
+
+### A Rust `extern` declaration that disagrees with the header
+
+*What goes wrong:* `rust/oopc.rs` restates each C signature by hand, as ctypes code does. Nothing
+compares it with `include/*.h`, so a wrong argument type compiles, links, and is undefined behavior.
+*Avoid it:* keep the block short and beside the header in review, or generate it with a binding
+generator once the API is large enough to pay for the dependency.
+
+### A base with tail padding (`rust-inv/`)
+
+*What goes wrong:* `rust-inv/` gets its prefix by making the base the first field. C's hand-written
+derived struct restates the fields flat. The two layouts agree for `Bottle`, but a base that ends in
+padding (a pointer and then an `int`, on a 64-bit target) is laid out differently by the two: flat
+fields reuse the padding, a nested base does not (16 bytes against 24 for that example, measured in
+C; the Rust side of it has not been built here).
+*Avoid it:* compare `Type.size` from the Rust build with `sizeof` in the C header, as the C suite's
+`Type_size` check does when it runs against `rust-inv/`.
+
 ### The C ABI trusts its callers
 
 *What goes wrong:* a null, freed, uninitialized or non-object `me` passed to a dispatcher is undefined
@@ -92,7 +132,8 @@ with `Class_cast`. This is the first thing to fix.
 
 *What goes wrong:* on the inverted routes, an exception escaping into C or a host language may
 terminate the process or unwind through frames that cannot handle it. **Neither `cpp-inv/` nor `cpp-inv-gen/`
-guards against this**, and the examples here have no error channel.
+guards against this** (`rust-inv/` is built with `panic=abort`, so a Rust panic there ends the process
+and never unwinds into C), and the examples here have no error channel.
 *Avoid it:* catch at every entry point, in one shared wrapper, and report through a convention: an
 `int` status with out-parameters, or null for a function returning an object. Or make sure no code
 behind the gateway can throw.

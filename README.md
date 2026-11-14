@@ -1,15 +1,16 @@
 # OOPC — Object Oriented Programming in C
 
 A single-inheritance object system in plain C, small enough to read in one
-sitting, wrapped so the *same* hierarchy appears natively in C++, Python and
-JavaScript — with no per-class glue in any of them.
+sitting, wrapped so the *same* hierarchy appears natively in C++, Rust, Python
+and JavaScript — with no per-class glue in any of them.
 
 The C ABI is the interface. Every other language binds to it with code in that
 language only.
 
 ```
    C          the object model: prefix layout, const vtables, runtime types
-   C++        cpp/*.hpp    zero bytes and zero vtable pointers of overhead
+   C++        cpp/*.hpp        zero bytes and zero vtable pointers of overhead
+   Rust       rust/oopc.rs     a view owns no bytes, an owner is one pointer; no crate
    Python     python/oopc.py   ctypes; no extension module
    JavaScript js/oopc.mjs      wasm exports; no glue module
 ```
@@ -101,10 +102,29 @@ Polymorphism goes through `cxx::Bottle &` and is resolved by the C vtable. See
 the header comments in `cpp/SizedBottle.hpp` for the five rules a new
 derived wrapper must follow.
 
-## Running it backwards: C++ as the source
+Rust has no inheritance, so `rust/oopc.rs` spells the hierarchy with two
+ordinary idioms. A class is a *view* that owns no bytes — `&Bottle` is the C
+`Bottle *` — and `SizedBottle` derefs to `Bottle`, which is the upcast. An
+`Owned<T>` is one pointer to an object C allocated, and dropping it deletes
+through the C vtable.
+
+```rust
+let mut sb = SizedBottle::new();   // Owned<SizedBottle>: one pointer
+sb.set_max_volume(10.0);
+sb.set_volume(100.0);              // Bottle's method, through Deref; C clamps it
+sb.get_volume();                   // 10.0
+SizedBottle::cast(&mut Bottle::new());   // None
+```
+
+The view is zero-sized on purpose. If `Bottle` were a Rust struct the size of
+the C one, safe code could `mem::swap` two `&mut Bottle` — one of them really a
+`SizedBottle` — and exchange their vtable pointers. With nothing in the view,
+that swap moves nothing.
+
+## Running it backwards: C++ or Rust as the source
 
 Everything above runs one way — C is the source of truth, and every other
-language binds to the ABI it publishes. Two directories run it the other way,
+language binds to the ABI it publishes. Three directories run it the other way,
 because the question is worth asking: *if you restrict yourself to single
 inheritance, polymorphic C++, can it be flattened to this same C?*
 
@@ -120,7 +140,7 @@ It can. The subset is not merely mappable, it is isomorphic:
 | `typeid` / `dynamic_cast` | `Type` + `Type_isa` | — | `using Super` |
 | `new (p) D()` / `p->~D()` | `D_init(p)` / `D_fini(p)` | — | the same |
 
-Two implementations of that idea, each producing the **same C ABI**, each
+Three implementations of that idea, each producing the **same C ABI**, each
 verified by linking the unmodified `src/cmain.c` against it and by running
 `python/oopc.py` unchanged over it:
 
@@ -128,17 +148,21 @@ verified by linking the unmodified `src/cmain.c` against it and by running
 |---|---|---|---|---|
 | [`cpp-inv/`](cpp-inv/README.md) | C++ headers | templates emit the ABI at compile time | none | no — the vtable is authored, so its layout is ours |
 | [`cpp-inv-gen/`](cpp-inv-gen/README.md) | ordinary C++ | libclang reads it, writes the C | libclang | yes — the C++ is read, never linked |
+| [`rust-inv/`](rust-inv/README.md) | Rust, `#![no_std]` | `#[repr(C)]` and `#[no_mangle]` emit the ABI | none | no such thing — the vtable is a `static` struct |
 
 ```bash
-make cpp-inv cpp-inv-gen test-inverted
+make cpp-inv cpp-inv-gen rust-inv test-inverted
 ```
 
 `cpp-inv/` is the one to reach for: no toolchain dependency, no generated code to
 debug, and every invariant checked by the compiler that is already running.
 `cpp-inv-gen/` is the one to *read*: it emits C you can put side by side with
-`src/SizedBottle.c` and see is the same file.
+`src/SizedBottle.c` and see is the same file. `rust-inv/` is the same exercise
+in a language with no classes at all: the base is the first field, the fini
+chain is `Drop`, and the whole build is one object file with no Rust runtime in
+it.
 
-Neither replaces `src/*.c`. For teaching, the hand-written C is the artifact
+None of them replaces `src/*.c`. For teaching, the hand-written C is the artifact
 that shows the mechanism; the inverted models show what it costs to stop
 maintaining it by hand.
 
@@ -167,10 +191,14 @@ make all            # bin/cbottle, bin/cppbottle, bin/liboopc.<dylib|so>
 make test           # C, C++ and Python
 make CFLAGS="-g -Iinclude -fPIC -DDEBUG" all    # with tracing
 
-make cpp-inv test-cpp-inv     # C++ as the source, header-only  (needs C++17)
-make cpp-inv-gen test-cpp-inv-gen     # C++ as the source, generated C   (needs libclang)
-make test-inverted      # both
+make test-rust                         # Rust over the C ABI                (needs rustc)
+make cpp-inv test-cpp-inv              # C++ as the source, header-only     (needs C++17)
+make cpp-inv-gen test-cpp-inv-gen      # C++ as the source, generated C     (needs libclang)
+make rust-inv test-rust-inv            # Rust as the source                 (needs rustc)
+make test-inverted                     # all three inverted routes
 ```
+
+`pixi run make …` supplies libclang and rustc from `pixi.toml`.
 
 WebAssembly needs Emscripten, which CI installs — see
 `.github/workflows/build-test.yml`:

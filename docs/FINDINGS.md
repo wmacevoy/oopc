@@ -18,6 +18,51 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
 - REQ4/SHAPE-4 verdict: pass by Warren MacEvoy, 2026-11-09
 - REQ4/SHAPE-5 verdict: pass by Warren MacEvoy, 2026-11-09
 
+## 2026-11-14 — a Rust struct the size of the C object is sliced by safe code
+
+- **What happened:** before the Rust binding was written, the natural design was a `#[repr(C)]`
+  `Bottle` holding the C struct's bytes, as `cxx::Bottle` does. In a trial with the view given 16
+  bytes, `std::mem::swap` on two `&mut Bottle`, one of them a `SizedBottle`, exchanged their vtable
+  pointers and volumes with no `unsafe` in the calling code: each object then reported the other's
+  class, and the clamp no longer ran (5 checks failed). C++ has the same hazard as assignment
+  slicing; in Rust it is reachable from safe code.
+- **Kind:** K1 — predicted when the design was proposed, then shown.
+- **Cost:** none; tried before the requirement was written.
+- **Findable by:** a swap through base references in the suite.
+- **Changed:** a Rust class is a view with no bytes and `Owned<T>` holds the pointer (REQ7/RS-1,
+  REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
+  seen failing; ADOPTING lists the footgun.
+
+## 2026-11-14 — the Rust suite did not link on Linux arm64
+
+- **What happened:** the first CI run of `make test-rust` failed on `ubuntu-24.04-arm` only:
+  `tmp/Trace.o: undefined reference to symbol '__stack_chk_guard'`. The C objects were passed to
+  rustc as bare link arguments, which it places after libc on the link line. On that platform the
+  stack protector's guard lives in the dynamic loader, which the linker takes from libc's script
+  only if something before it needs it. Linux x64 and macOS linked.
+- **Kind:** K2.
+- **Cost:** one red CI run on PR #7.
+- **Findable by:** CI on every platform shipped
+  ([SE1/O3](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/07-operating.md#o3)) —
+  which is how it was found. Not reproducible on the author's x64 machine.
+- **Changed:** the C objects go to rustc as a static library (`tmp/liboopc.a`, `-l static=oopc`),
+  which rustc places before libc; the Makefile says why.
+
+## 2026-11-14 — each new Rust check was seen failing; three small surprises
+
+- **What happened:** REQ7/RS-1's assert stopped the build when a view had a size. REQ7/RS-2's checks
+  failed with the clamp removed from `src/SizedBottle.c`. With the clamp removed from
+  `rust-inv/sized_bottle.rs`, the unmodified C suite failed against it (REQ7/INV-5). Three things
+  surprised the author: rustc's `improper_ctypes` lint refuses a view made of `PhantomData` alone in
+  an `extern` signature; Rust block comments nest, so `include/*.h` inside one never closes; and a
+  `cdylib` would not export the C objects linked into it, which is why `rust-inv/` builds an object
+  file.
+- **Kind:** K2 — none was looked for.
+- **Cost:** minutes each.
+- **Findable by:** building it.
+- **Changed:** the first two are in CLAUDE.md under *The Rust binding*; the third is a decision in
+  DESIGN_v1.
+
 ## 2026-11-09 — every layout assert fires; a mistyped slot is an error only under some compilers
 
 - **What happened:** with one change each in a scratch copy, all 13 asserts failed with their own

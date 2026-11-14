@@ -156,8 +156,9 @@ jobs:
       - name: Test JS binding
         run: make test-js
 
-  # REQ4/INV-4, REQ7/BLD-3: both inverted models, on GCC (Linux) and clang
-  # (macOS), at the Python floor and the newest. No lock file exists to cache
+  # REQ4/INV-4, REQ7/BLD-3, REQ7/BLD-4: the inverted models and the Rust
+  # binding, on GCC (Linux) and clang (macOS), at the Python floor and the
+  # newest. pixi supplies libclang and rustc. No lock file exists to cache
   # against, so each run resolves fresh.
   inverted:
     strategy:
@@ -179,10 +180,13 @@ jobs:
       - name: Test (C, C++, Python via ctypes)
         run: pixi run -e ${{ matrix.pixi-env }} make test
 
+      - name: Test the Rust binding
+        run: pixi run -e ${{ matrix.pixi-env }} make test-rust
+
       - name: Test the inverted models
         run: |
           pixi run -e ${{ matrix.pixi-env }} make clean
-          pixi run -e ${{ matrix.pixi-env }} make cpp-inv cpp-inv-gen test-inverted
+          pixi run -e ${{ matrix.pixi-env }} make cpp-inv cpp-inv-gen rust-inv test-inverted
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
