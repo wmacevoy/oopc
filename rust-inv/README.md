@@ -37,7 +37,8 @@ runaway recursion `src/SizedBottle.c` warns about has no natural spelling.
 The build is one `rustc` command, with no cargo project and no crates:
 
 ```bash
-rustc --edition 2021 --crate-type=lib --emit=obj -O -C panic=abort -o tmp/rust-inv.o rust-inv/oopc.rs
+rustc --edition 2021 -g --crate-type=lib --emit=obj -O -C panic=abort -C relocation-model=pic \
+      -o tmp/rust-inv.o rust-inv/oopc.rs
 ```
 
 The crate is `#![no_std]`, and the result is an object file that links exactly
