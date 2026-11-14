@@ -100,8 +100,8 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
 - **A Rust class is a zero-sized view; `Owned<T>` holds the pointer** — REQ7/RS-1, REQ7/RS-3 — a
   view with no bytes cannot be swapped or replaced by safe code — rejected: a `#[repr(C)]` struct the
   size of the C object, in place, as the C++ wrapper does (safe `mem::swap` slices it;
-  [FINDINGS](FINDINGS.md) 2026-11-14); cost: one pointer and a C allocation per owner — source: this
-  session's trial; the client has not yet confirmed the cost (REQUIREMENTS_v7, Assumptions).
+  [FINDINGS](FINDINGS.md) 2026-11-14); cost: one pointer and a C allocation per owner — source: a trial,
+  2026-11-14; the client confirmed the cost the same day (REQUIREMENTS_v7, Assumptions).
 - **`Owned<T>` drops through `Bottle_delete`** — REQ7/RS-2 — the C dispatcher finalizes the dynamic
   class, so an owner of the base may hold a derived object; the C++ wrapper cannot offer that without
   a second vtable pointer — source: `rust/oopc.rs`.
