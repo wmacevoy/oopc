@@ -34,6 +34,19 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
   REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
   seen failing; ADOPTING lists the footgun.
 
+## 2026-11-14 — `cpp-inv/` now exports the `Class_vf_*` functions
+
+- **What happened:** the client decided the open question below: `cpp-inv/` should export them. The
+  C suite was changed first, to make its two test classes with const tables that name `Bottle`'s
+  slots and to call each of the seven `Class_vf_*` functions; against `cpp-inv/` as it was, it failed
+  to link with all seven undefined. Seven one-line exports in `cpp-inv/src/exports.cpp`, each the
+  slot in the class's own table called directly, and it passes there and on every other route.
+- **Kind:** K3, closed — see the entry below for how it was found.
+- **Cost:** an hour.
+- **Findable by:** a suite that names every symbol the headers declare.
+- **Changed:** the C suite names the whole protected layer, so a route that omits one fails to link
+  (REQ1/INV-1); `cpp-inv/README.md` and CLAUDE.md say so.
+
 ## 2026-11-14 — "no virtual destructor" read as if the pattern had none
 
 - **What happened:** reading the requirements, the client found "a virtual destructor in the
