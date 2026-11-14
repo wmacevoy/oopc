@@ -70,7 +70,7 @@ $(SHLIB) : $(OBJS)
 .PHONY: all clean test test-c test-cpp test-python test-js wasm wasm-raw wasm-debug emcc-build \
         cpp-inv cpp-inv-gen gen test-cpp-inv test-cpp-inv-gen test-inverted \
         rust test-rust rust-inv test-rust-inv rust-inv-wasm test-rust-inv-wasm \
-        prove prove-src prove-cpp-inv-gen test-mix
+        prove prove-src prove-cpp-inv-gen prove-contracts test-mix
 
 all : bin/cbottle bin/cppbottle $(SHLIB)
 
@@ -382,7 +382,34 @@ prove-cpp-inv-gen : proof/oopc_proof.c $(CPPINVGEN_GEN) src/Type.c src/Trace.c
 	@grep -q "^VERIFICATION SUCCESSFUL" tmp/prove-cpp-inv-gen.out
 	@echo "prove: cpp-inv-gen/gen/: $$(grep -c ': SUCCESS$$' tmp/prove-cpp-inv-gen.out) properties, 0 failed, any $(PROOF_STEPS) calls: PASS"
 
-prove : prove-src prove-cpp-inv-gen
+# The proof in pieces (proof/contract.h, REQ10/PRF-5 and PRF-6).  Each class
+# keeps the caller's contract and a client is proved from that contract alone;
+# each Bottle meets the extender's contract and each SizedBottle is proved over
+# proof/bottle_contract.c in place of a Bottle.  No pairing is proved here:
+# that is the point.
+prove-contracts : $(wildcard proof/*.c proof/*.h) $(CPPINVGEN_GEN) $(WASM_SRCS)
+	@command -v $(CBMC) > /dev/null || { echo "no model checker '$(CBMC)'; install CBMC or set CBMC=<path>"; exit 1; }
+	@run() { what="$$1"; shift; \
+	    $(CBMC) "$$@" -Iproof $(CBMCFLAGS) > tmp/prove-contracts.out 2>&1 \
+	      || { grep -E "FAILURE|ERROR|error" tmp/prove-contracts.out; echo "prove: $$what: FAILED (see tmp/prove-contracts.out)"; exit 1; }; \
+	    echo "prove: $$what: $$(grep -c ': SUCCESS$$' tmp/prove-contracts.out) properties, 0 failed: PASS"; }; \
+	  T="src/Type.c src/Trace.c"; G=cpp-inv-gen/gen; \
+	  run "caller's contract: src/ keeps it, and a client holds from it alone" \
+	      proof/caller_contract.c $$T src/Bottle.c src/SizedBottle.c -Iinclude && \
+	  run "caller's contract: cpp-inv-gen/gen/ keeps it" \
+	      proof/caller_contract.c $$T $$G/Bottle.c $$G/SizedBottle.c -I$$G -Iinclude && \
+	  run "extender's contract: src/Bottle.c meets it" \
+	      proof/extender_contract.c $$T src/Bottle.c -Iinclude && \
+	  run "extender's contract: cpp-inv-gen/gen/Bottle.c meets it" \
+	      proof/extender_contract.c $$T $$G/Bottle.c -I$$G -Iinclude && \
+	  run "extender's contract: proof/bottle_contract.c meets it" \
+	      proof/extender_contract.c $$T proof/bottle_contract.c -Iinclude && \
+	  run "src/SizedBottle.c over the contract, with no Bottle" \
+	      proof/oopc_proof.c proof/bottle_contract.c src/SizedBottle.c $$T -Iinclude && \
+	  run "cpp-inv-gen/gen/SizedBottle.c over the contract, with no Bottle" \
+	      proof/oopc_proof.c proof/bottle_contract.c $$G/SizedBottle.c $$T -I$$G -Iinclude
+
+prove : prove-src prove-cpp-inv-gen prove-contracts
 	@echo "Proof: PASS"
 
 # ===========================================================================

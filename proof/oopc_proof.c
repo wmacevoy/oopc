@@ -27,6 +27,9 @@
 
   Nothing is assumed about malloc: it may return null, and then Class_new must.
 
+  This is the proof of the whole: both classes, read together.  The same
+  claims cut into pieces that can be proved apart are in contract.h.
+
   Run: make prove        (labels name the requirement, docs/REQUIREMENTS_v9.md;
                           the proof itself is REQ9/PRF-1 to PRF-3)
 */

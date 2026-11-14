@@ -202,6 +202,17 @@ generates. It refuses a removed clamp, a cast that accepts anything, a leak, and
 the `Bottle_fini` recursion — and, with the first assumption removed, it finds
 NaN by itself.
 
+Proving everything at once does not scale, and says nothing about a class nobody
+has written yet. So the proof is also cut into pieces, by two contracts
+(`proof/contract.h`). The *caller's contract* is what holds through a `Bottle *`
+whatever the object is — and "a Bottle keeps what it is given" is not in it,
+because a `SizedBottle` clamps. The *extender's contract* is what a derived
+class may rely on from its base. Each class is shown to keep the first, and a
+client is then proved from the contract alone; each `Bottle` is shown to meet
+the second, and each `SizedBottle` is proved with the contract standing in for
+a `Bottle`. If `Bottle` is correct, a new class only has to show those two
+things, and no pairing is ever proved.
+
 ```bash
 make prove CBMC=/path/to/cbmc
 ```
