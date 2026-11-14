@@ -19,8 +19,8 @@ import os
 
 def _load():
     # OOPC_LIB names an alternative build of the SAME C ABI.  The point of the
-    # cpp1/ and cpp2/ experiments is that this file does not have to change:
-    #   OOPC_LIB=bin/liboopc1.dylib python3 python/test_oopc.py
+    # cpp-inv/ and cpp-inv-gen/ experiments is that this file does not have to change:
+    #   OOPC_LIB=bin/liboopc-cpp-inv.dylib python3 python/test_oopc.py
     # runs this binding against the C++-authored implementation instead.
     override = os.environ.get("OOPC_LIB")
     if override:

@@ -1,7 +1,7 @@
 #pragma once
 
 /*
-  cpp-1: Bottle, written as C++, flattened to the C ABI in include/Bottle.h.
+  cpp-inv: Bottle, written as C++, flattened to the C ABI in include/Bottle.h.
 
   Compare src/Bottle.c side by side.  Every construct below has an exact image
   there, and the mapping is mechanical:
@@ -93,7 +93,7 @@ namespace oopc1 {
     /* Derived constructors take this: the base must not install its own table
        before the derived class installs the real one.  ::SizedBottle_init does
        install the base table and then overwrite it; both orders are correct,
-       and the difference is discussed in cpp1/README.md. */
+       and the difference is discussed in cpp-inv/README.md. */
     enum Uninitialized { UNINITIALIZED };
     explicit Bottle(Uninitialized) {}
 

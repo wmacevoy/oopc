@@ -1,19 +1,19 @@
 /*
-  cpp-2 from the C++ side: the model, run as ordinary C++.
+  cpp-inv-gen from the C++ side: the model, run as ordinary C++.
 
-  This program includes cpp2/model/SizedBottle.hpp and uses it exactly as
+  This program includes cpp-inv-gen/model/SizedBottle.hpp and uses it exactly as
   written -- real `virtual`, real overrides, a real C++ vtable.  Nothing here
   knows the generator exists.
 
-  Its behaviour matches bin/cbottle2, which runs the *generated C* against the
-  unmodified src/cmain.c; cpp2/src/checks.inc holds the two to that.  That is
-  the cpp-2 claim in one line: the C++ and the C mean the same thing.
+  Its behaviour matches bin/cbottle-cpp-inv-gen, which runs the *generated C* against the
+  unmodified src/cmain.c; cpp-inv-gen/src/checks.inc holds the two to that.  That is
+  the cpp-inv-gen claim in one line: the C++ and the C mean the same thing.
 
   What the C++ object costs here that the C one does not: nothing extra in
   bytes -- both are a vtable pointer plus the fields -- but the C++ vtable is
   the compiler's, so its layout is unspecified, its slots are not addressable
   from C, and the entry points are name-mangled.  The generator exists to turn
-  that private arrangement into the public one in cpp2/gen.
+  that private arrangement into the public one in cpp-inv-gen/gen.
 */
 
 #include <cstdio>
@@ -42,6 +42,6 @@ int main()
   std::printf("\nsizes\n");
   std::printf("  sizeof(Bottle)      = %zu\n", sizeof(Bottle));
   std::printf("  sizeof(SizedBottle) = %zu\n", sizeof(SizedBottle));
-  std::printf("\ncompare bin/cbottle2: the same behaviour, through the generated C.\n");
+  std::printf("\ncompare bin/cbottle-cpp-inv-gen: the same behaviour, through the generated C.\n");
   return 0;
 }

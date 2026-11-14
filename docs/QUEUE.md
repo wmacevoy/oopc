@@ -4,11 +4,14 @@ What is being worked, in what order, by whom, and what would make it done. The s
 ([SE1/W10](https://github.com/wmacevoy/software-engineering/blob/v1.3/guide/08-work.md#w10)).
 Nothing enters without a *done* sentence that can be checked from outside. Only a human sets *done*.
 
+Rows before #19 were written before the rename of 2026-11-14 (REQUIREMENTS_v7): read `cpp1/` as
+`cpp-inv/`, `cpp2/` as `cpp-inv-gen/`, and `include/*.hpp` as `cpp/*.hpp`.
+
 | # | Item | Versioned requirement IDs (or *chore*) | Owner | Done when | Estimate | Status | Since |
 | - | ---- | -------------------------------------- | ----- | --------- | -------- | ------ | ----- |
-| 4 | Add `cpp1/` and `cpp2/` to CI | REQ1/INV-1, REQ1/INV-2, REQ4/INV-4, REQ4/BLD-3 | agent | a PR that breaks `cpp1/` or `cpp2/` turns `.github/workflows/build-test.yml` red, on GCC and on clang, through pixi, and the Python suites run at Python 3.9 as well as the newest (REQ4/BLD-3) | range: 1–3 h | review | 2026-11-09 |
+| 4 | Add `cpp1/` and `cpp2/` to CI | REQ1/INV-1, REQ1/INV-2, REQ4/INV-4, REQ7/BLD-3 | agent | a PR that breaks `cpp1/` or `cpp2/` turns `.github/workflows/build-test.yml` red, on GCC and on clang, through pixi, and the Python suites run at Python 3.9 as well as the newest (REQ7/BLD-3) | range: 1–3 h | review | 2026-11-09 |
 | 15 | Assert the C++ model directly, with the same checks as its generated C | REQ4/INV-3 | agent | breaking the clamp in `cpp2/model/SizedBottle.hpp` alone fails the C++ model's check, and the demo no longer prints PASS on exit 0 alone | range: 1–3 h | review | 2026-11-09 |
-| 16 | Write the adopter's list of footguns | REQ4/ADP-1 | agent | one document, linked from the README, covers each footgun REQ4/ADP-1 names | range: 1–2 h | review | 2026-11-09 |
+| 16 | Write the adopter's list of footguns | REQ7/ADP-1 | agent | one document, linked from the README, covers each footgun REQ7/ADP-1 names | range: 1–2 h | review | 2026-11-09 |
 | 17 | Let `cpp2/` accept borrowed pointers to oopc objects as parameters (ADOPTING guideline 1) | REQ1/INV-2, REQ1/INV-1 | agent | `cpp2/oopcc.py` flattens a method taking a `Bottle *` and an accepted case behaves the same as C and as C++, while by-value and reference parameters are still refused with a test each; the ownership rule is in `cpp2/README.md`. An example on `cpp2/model` must also exist in every other layer (REQ1/INV-1), or stay in the generator's test cases | range: half a day | review | 2026-11-09 |
 | 18 | Refuse what the generator would mistranslate: default member initializers, initializer lists, pure virtual methods, default arguments, namespaces, sources with no model class | REQ1/INV-2 | agent | each form exits 2 with a test seen failing, and the generated C for `cpp2/model` is unchanged | range: 1 h | review | 2026-11-09 |
 | 1 | Make the C and C++ suites assert behaviour, not just exit 0 | REQ2/OM-1, REQ2/OM-6, REQ2/TY-2, REQ2/CXX-3 | agent | with the clamp in `src/SizedBottle.c` removed, `make test-c` and `make test-cpp` each fail ([FINDINGS](FINDINGS.md)) | time box: half a day | review | 2026-10-26 |
@@ -24,3 +27,7 @@ Nothing enters without a *done* sentence that can be checked from outside. Only 
 | 12 | `setMaxVolume` lowers the volume, in `src/`, `cpp1/` and `cpp2/` | REQ2/OM-6 | agent | the C, C++, Python and JS suites each check it, and the C suite passes against both inverted models | range: 1 h | review | 2026-10-26 |
 | 13 | 32-bit and raw-wasm CI jobs | REQ2/BLD-1, REQ2/BLD-2 | agent | the `i386` and `wasm-raw` jobs pass on GitHub Actions | range: 1 h | review | 2026-10-26 |
 | 14 | Generated C keeps one statement per line, so GCC accepts it | REQ1/INV-2, REQ4/INV-4 | agent | `pixi run make test-cpp2` passes under GCC, and the generated C for `cpp2/model` is unchanged | range: 30 min | review | 2026-11-09 |
+| 19 | Move the C++ wrapper to `cpp/`; rename `cpp1/` to `cpp-inv/` and `cpp2/` to `cpp-inv-gen/` | REQ7/SHAPE-2 | agent | no tracked path, binary or make target is named `cpp1` or `cpp2`, `include/` holds no `.hpp`, and `make test` and `make test-inverted` pass in CI | range: 1–2 h | review | 2026-11-14 |
+| 20 | Rust over the C ABI (`rust/`) | REQ7/RS-1, REQ7/RS-2, REQ7/RS-3, REQ7/RS-4, REQ7/BLD-4 | agent | `make test-rust` passes in CI; it fails with the clamp in `src/SizedBottle.c` removed, and its RS-3 checks fail when a view is given 16 bytes ([FINDINGS](FINDINGS.md) 2026-11-14) | range: 2–4 h | ready | 2026-11-14 |
+| 21 | Rust as the source (`rust-inv/`) | REQ7/INV-5 | agent | `make test-rust-inv` passes in CI, and the C suite fails against it with the clamp in `rust-inv/sized_bottle.rs` removed | range: 2–4 h | ready | 2026-11-14 |
+| 22 | Confirm REQUIREMENTS_v7 with the client: its four unconfirmed assumptions, and the verdict on REQ7/SHAPE-2 | all of REQUIREMENTS_v7 | Warren | REQUIREMENTS_v7 says agreed, with a date, and FINDINGS has a verdict line for REQ7/SHAPE-2 | time box: 30 min | ready | 2026-11-14 |

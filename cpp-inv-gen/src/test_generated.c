@@ -1,4 +1,4 @@
-/* REQ4/INV-3: the shared checks against the generated C.  Run: make test-cpp2 */
+/* REQ4/INV-3: the shared checks against the generated C.  Run: make test-cpp-inv-gen */
 
 #include "SizedBottle.h"
 

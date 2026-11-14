@@ -1,15 +1,15 @@
-# cpp-1 — C++ is the source, the C ABI is emitted by a header
+# cpp-inv — C++ is the source, the C ABI is emitted by a header
 
 The rest of this repository runs one way: C is the source of truth and
-`include/*.hpp` is a thin C++ *view* of it. This directory runs the other way.
-`cpp1/include/oopc/*.hpp` **is** the implementation, written in C++, and the C
+`cpp/*.hpp` is a thin C++ *view* of it. This directory runs the other way.
+`cpp-inv/include/oopc/*.hpp` **is** the implementation, written in C++, and the C
 ABI in `include/Bottle.h` / `include/SizedBottle.h` is what it emits.
 
-Nothing else in the tree changes. `bin/cbottle1` is the unmodified `src/cmain.c`
+Nothing else in the tree changes. `bin/cbottle-cpp-inv` is the unmodified `src/cmain.c`
 linked against this build; `python/oopc.py` runs against it unchanged.
 
 ```bash
-make cpp1 test-cpp1
+make cpp-inv test-cpp-inv
 ```
 
 ## Why invert
@@ -17,7 +17,7 @@ make cpp1 test-cpp1
 `CLAUDE.md` lists four things `src/*.c` maintains by hand, with nothing
 checking them. All four stop being human problems here:
 
-| kept by hand in `src/*.c` | kept by the compiler in `cpp1/` |
+| kept by hand in `src/*.c` | kept by the compiler in `cpp-inv/` |
 |---|---|
 | `SizedBottleVftbl` restates every `BottleVftbl` slot, in order | `Bottle::Vtbl base;` — one line, one time |
 | `struct SizedBottleStruct` restates every base field, in order | `: public Bottle` |
@@ -95,7 +95,7 @@ and would silently invert that rule.
 
 ## What is still hand-written
 
-`cpp1/src/exports.cpp`: one line per entry point. It cannot be shorter — C has
+`cpp-inv/src/exports.cpp`: one line per entry point. It cannot be shorter — C has
 no reflection and neither does C++17, so nothing can enumerate a class's methods
 and mint C names. C++26 static reflection (P2996) can enumerate members but
 still does not hand you arbitrary `extern "C"` symbols, so some form of that list
@@ -117,7 +117,7 @@ header publishes and the one the vtable points at must be the same object.
 `oopc1::Bottle` is standard-layout, so `(void*)this == (void*)&_vptr` is
 guaranteed. `oopc1::SizedBottle` holds data in two classes and therefore is not,
 so the standard says nothing about where the base subobject sits — the same gap
-`include/SizedBottle.hpp` already documents, closed the same way: a base at any offset `O > 0`
+`cpp/SizedBottle.hpp` already documents, closed the same way: a base at any offset `O > 0`
 would make the object `O` bytes larger than the base plus `_maxVolume`, and fail
 the size `static_assert`.
 
@@ -128,14 +128,14 @@ regardless; only the C and host views of the bytes depend on offset 0.
 
 ## Verified
 
-`make test-cpp1` checks, in order:
+`make test-cpp-inv` checks, in order:
 
-- `bin/cbottle` and `bin/cbottle1` produce **byte-identical** output — the same
+- `bin/cbottle` and `bin/cbottle-cpp-inv` produce **byte-identical** output — the same
   C program, one linked against `src/*.c`, one against this;
-- `bin/cpp1bottle` uses the classes natively (stack objects, RAII, polymorphism
+- `bin/cpp-inv-bottle` uses the classes natively (stack objects, RAII, polymorphism
   through `oopc1::Bottle&`) and reports `sizeof` equal to the C structs;
 - `python/oopc.py`, unmodified, passes its whole suite against
-  `bin/liboopc1.<dylib|so>` via `OOPC_LIB`, including the host-owned-memory path.
+  `bin/liboopc-cpp-inv.<dylib|so>` via `OOPC_LIB`, including the host-owned-memory path.
 
 Clean under `-Wall -Wextra -Wpedantic -Werror` and under UBSan.
 

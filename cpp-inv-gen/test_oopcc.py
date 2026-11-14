@@ -1,5 +1,5 @@
 """
-Tests for the cpp-2 generator.  Run: python3 cpp2/test_oopcc.py
+Tests for the cpp-inv-gen generator.  Run: python3 cpp-inv-gen/test_oopcc.py
 
 Two halves, and the second is the important one.
 
@@ -9,7 +9,7 @@ under -Wall -Wextra -Wpedantic -Werror and behaves the same.
 NEGATIVE: everything outside the flattenable subset is REFUSED, with a message
 that says why.  A generator that silently emitted plausible-looking C for a
 construct it does not really support would be worse than no generator at all --
-the whole value of cpp-2 is that the C is trustworthy without reading it.
+the whole value of cpp-inv-gen is that the C is trustworthy without reading it.
 """
 
 import os
@@ -368,4 +368,4 @@ class A { public: A() {} virtual ~A() {} virtual int get() const { return x; }
 protected: int x; };
 """, "templates")
 
-print("\ncpp2: %d assertions passed" % passed)
+print("\ncpp-inv-gen: %d assertions passed" % passed)

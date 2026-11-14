@@ -1,6 +1,6 @@
 # Design — v1
 
-How the requirements in [REQUIREMENTS_v6](REQUIREMENTS_v6.md) are met, and what was rejected. The
+How the requirements in [REQUIREMENTS_v7](REQUIREMENTS_v7.md) are met, and what was rejected. The
 mechanism itself — layout rules, the five wrapper rules, the fini footgun — is in
 [`CLAUDE.md`](../CLAUDE.md#architecture), which stays the one place it is written
 ([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.7/guide/05-design.md#d6)). This
@@ -18,12 +18,12 @@ Reasons cite the commit that stated them; reasons with no source are marked *(in
 | `include/Trace.h`, `src/Trace.c` | 0 | C | `TRACE(...)`, `Trace_to(sink)` | the sink pointer |
 | `Bottle.{h,c}` | 1 | C | root class | per object |
 | `SizedBottle.{h,c}` | 2 | C | derived class | per object |
-| `include/*.hpp` (`cxx::`) | 3 | C++11 | zero-overhead wrapper | none of its own |
+| `cpp/*.hpp` (`cxx::`) | 3 | C++11 | zero-overhead wrapper | none of its own |
 | `python/oopc.py` | 3 | Python | ctypes binding | none of its own |
 | `js/oopc.mjs`, `js/load.mjs` | 3 | JS | wasm binding; loader | none of its own |
-| `src/cmain.c`, `src/cppmain.cpp` | 4 | demo | prints the mechanism | — |
-| `cpp1/` | 1–2 alt | C++17 | emits the layer-1/2 ABI from headers | per object |
-| `cpp2/` | 1–2 alt | Python + libclang | emits `cpp2/gen/*.{h,c}` from `cpp2/model/` | per object |
+| `src/cmain.c`, `cpp/cppmain.cpp` | 4 | demo | prints the mechanism | — |
+| `cpp-inv/` | 1–2 alt | C++17 | emits the layer-1/2 ABI from headers | per object |
+| `cpp-inv-gen/` | 1–2 alt | Python + libclang | emits `cpp-inv-gen/gen/*.{h,c}` from `cpp-inv-gen/model/` | per object |
 
 A component depends only on lower layers. Nothing checks this
 ([QUEUE](QUEUE.md) #6).
@@ -34,7 +34,7 @@ A component depends only on lower layers. Nothing checks this
 | ----- | --------------------- | ------ | ------------- | -------------------------- |
 | object fields (`volume`, `maxVolume`) | the C object | none — every wrapper and binding reads through the C functions | — | — |
 | vtable, `Type` | `static const` in the class's `.c` | none | — | — |
-| the struct layouts | `include/*.h` | `cxx::` reserved bytes; `cpp1/`, `cpp2/gen/`; Python's ctypes `Type` | until a rebuild | `static_assert` fails (C++); the C suite fails (inverted models) |
+| the struct layouts | `include/*.h` | `cxx::` reserved bytes; `cpp-inv/`, `cpp-inv-gen/gen/`; Python's ctypes `Type` | until a rebuild | `static_assert` fails (C++); the C suite fails (inverted models) |
 | trace sink | `src/Trace.c` | none | — | — |
 
 ## Essential complexity
@@ -79,16 +79,21 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
   JS (still couples JS to the layout) — source: client, 2026-10-26. Python keeps its ctypes
   `Structure`, which is layout-correct on any platform.
 - **`setMaxVolume` lowers the volume directly, not through the dispatcher** — REQ2/OM-6 — one
-  readable line, and the generator translates the `cpp2` model's version to the same line —
+  readable line, and the generator translates the `cpp-inv-gen` model's version to the same line —
   source: client, 2026-10-26.
 - **Every suite checks values and names its requirement** — REQ2/BLD-1 — `bin/cbottle` and
   `bin/cppbottle` once stood in for C and C++ tests and could not fail on a wrong answer
   ([FINDINGS](FINDINGS.md) 2026-10-26) — source: this adoption.
-- **Two inverted models rather than one** — REQ2/INV-1 — `cpp1/` is the one to use (no toolchain),
-  `cpp2/` the one to read (its output diffs against `src/`) — source: `README.md` *(not yet
+- **Two inverted C++ models rather than one** — REQ2/INV-1 — `cpp-inv/` is the one to use (no toolchain),
+  `cpp-inv-gen/` the one to read (its output diffs against `src/`) — source: `README.md` *(not yet
   committed)*.
-- **`cpp1/` uses no `virtual`** — REQ2/INV-1 — an authored vtable has a layout C can read; a
-  compiler's does not — source: `cpp1/README.md` *(not yet committed)*.
+- **`cpp-inv/` uses no `virtual`** — REQ2/INV-1 — an authored vtable has a layout C can read; a
+  compiler's does not — source: `cpp-inv/README.md` *(not yet committed)*.
+
+- **C++ lives in `cpp/`, and directories are named language first** — REQ7/SHAPE-2 — `include/` and
+  `src/` are plain C only, C++ sits beside `python/` and `js/` as one more language at the gateway,
+  and a listing groups each language's routes (`cpp`, `cpp-inv`, `cpp-inv-gen`, `rust`, `rust-inv`)
+  — rejected: `invcpp`, `autoinvcpp` (scatter in a listing) — source: client, 2026-11-14.
 
 ## Deferred
 

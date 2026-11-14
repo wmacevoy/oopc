@@ -1,12 +1,12 @@
 /*
-  cpp-1 from the C++ side: this is what the inversion buys the C++ programmer.
+  cpp-inv from the C++ side: this is what the inversion buys the C++ programmer.
 
   Stack objects, RAII, polymorphism through a base reference, checked casts --
   and the objects are still exactly the C structs, with one pointer of overhead
   and no C++ vtable pointer anywhere.  Nothing here uses the `virtual` keyword,
   because the vtable is authored rather than emitted.
 
-  Contrast include/Bottle.hpp: that wrapper has to reserve `extra` bytes by hand
+  Contrast cpp/Bottle.hpp: that wrapper has to reserve `extra` bytes by hand
   and forward every method to a C function.  Here there is no wrapper -- the
   C++ class IS the implementation, and the C functions are the wrapper.
 */

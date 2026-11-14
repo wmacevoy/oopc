@@ -9,7 +9,7 @@ language only.
 
 ```
    C          the object model: prefix layout, const vtables, runtime types
-   C++        include/*.hpp    zero bytes and zero vtable pointers of overhead
+   C++        cpp/*.hpp    zero bytes and zero vtable pointers of overhead
    Python     python/oopc.py   ctypes; no extension module
    JavaScript js/oopc.mjs      wasm exports; no glue module
 ```
@@ -98,7 +98,7 @@ SizedBottle.cast(new Bottle()); // null
 The C++ wrapper is the strict case: it adds **no** memory and **no** second
 vtable pointer, so `sizeof(cxx::SizedBottle) == sizeof(::SizedBottle)`.
 Polymorphism goes through `cxx::Bottle &` and is resolved by the C vtable. See
-the header comments in `include/SizedBottle.hpp` for the five rules a new
+the header comments in `cpp/SizedBottle.hpp` for the five rules a new
 derived wrapper must follow.
 
 ## Running it backwards: C++ as the source
@@ -126,16 +126,16 @@ verified by linking the unmodified `src/cmain.c` against it and by running
 
 | | source | mechanism | build step | `virtual` keyword |
 |---|---|---|---|---|
-| [`cpp1/`](cpp1/README.md) | C++ headers | templates emit the ABI at compile time | none | no — the vtable is authored, so its layout is ours |
-| [`cpp2/`](cpp2/README.md) | ordinary C++ | libclang reads it, writes the C | libclang | yes — the C++ is read, never linked |
+| [`cpp-inv/`](cpp-inv/README.md) | C++ headers | templates emit the ABI at compile time | none | no — the vtable is authored, so its layout is ours |
+| [`cpp-inv-gen/`](cpp-inv-gen/README.md) | ordinary C++ | libclang reads it, writes the C | libclang | yes — the C++ is read, never linked |
 
 ```bash
-make cpp1 cpp2 test-inverted
+make cpp-inv cpp-inv-gen test-inverted
 ```
 
-`cpp1/` is the one to reach for: no toolchain dependency, no generated code to
+`cpp-inv/` is the one to reach for: no toolchain dependency, no generated code to
 debug, and every invariant checked by the compiler that is already running.
-`cpp2/` is the one to *read*: it emits C you can put side by side with
+`cpp-inv-gen/` is the one to *read*: it emits C you can put side by side with
 `src/SizedBottle.c` and see is the same file.
 
 Neither replaces `src/*.c`. For teaching, the hand-written C is the artifact
@@ -167,8 +167,8 @@ make all            # bin/cbottle, bin/cppbottle, bin/liboopc.<dylib|so>
 make test           # C, C++ and Python
 make CFLAGS="-g -Iinclude -fPIC -DDEBUG" all    # with tracing
 
-make cpp1 test-cpp1     # C++ as the source, header-only  (needs C++17)
-make cpp2 test-cpp2     # C++ as the source, generated C   (needs libclang)
+make cpp-inv test-cpp-inv     # C++ as the source, header-only  (needs C++17)
+make cpp-inv-gen test-cpp-inv-gen     # C++ as the source, generated C   (needs libclang)
 make test-inverted      # both
 ```
 

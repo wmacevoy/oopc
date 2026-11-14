@@ -1,7 +1,7 @@
 #pragma once
 
 /*
-  cpp-1: the derived class.  This is where the inversion earns its keep.
+  cpp-inv: the derived class.  This is where the inversion earns its keep.
 
   Read src/SizedBottle.c next to this file.  Four things that file maintains by
   hand, with nothing checking them, are gone here:
