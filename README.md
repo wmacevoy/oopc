@@ -164,6 +164,12 @@ in a language with no classes at all: the base is the first field, the fini
 chain is `Drop`, and the whole build is one object file with no Rust runtime in
 it.
 
+Because all of them meet at one ABI, a class written in one language can be
+extended in another. `make test-mix` links a `Bottle` from C, C++ or Rust under
+a `SizedBottle` from each of the three — nine programs — and runs the unmodified
+C suite on every one, including its checks that a further class can derive from
+the result.
+
 None of them replaces `src/*.c`. For teaching, the hand-written C is the artifact
 that shows the mechanism; the inverted models show what it costs to stop
 maintaining it by hand.

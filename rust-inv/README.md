@@ -62,6 +62,16 @@ README, with `Bottle` and `SizedBottle` coming from this directory and
 `malloc` and `free` stay imports the host supplies. `js/test_oopc.mjs` runs on
 it unchanged, chosen by `OOPC_WASM` (REQ8/BLD-5).
 
+## Extending across languages
+
+`sized_bottle.rs` extends the Rust `Bottle` beside it, which is how the compiler
+gets to keep the prefix and the fini chain. It cannot sit over a `Bottle` from C
+or C++. `make test-mix` shows the other arrangement (REQ10/INV-6): built with
+`--cfg bottle_only`, this directory's `Bottle` goes under a `SizedBottle` from C
+or C++; and `test_sized_over_abi.rs`, a test-only Rust `SizedBottle` that names
+its base's slots as `src/SizedBottle.c` does, goes over a `Bottle` from any of
+the three.
+
 ## What it does not do
 
 - **It does not trace.** `TRACE` is a C macro over a variadic function; the C

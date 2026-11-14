@@ -34,6 +34,21 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
   REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
   seen failing; ADOPTING lists the footgun.
 
+## 2026-11-14 — nine pairings of Bottle and SizedBottle across C, C++ and Rust all pass
+
+- **What happened:** the client asked that a class in one language be extendable in another, as a
+  test. Six pairings needed no new source: a `Bottle` from `src/`, from `cpp-inv-gen/`'s output or
+  from `rust-inv/` (built without its `SizedBottle`), under the `SizedBottle` of `src/` or of
+  `cpp-inv-gen/`. The Rust `SizedBottle` row needed a test-only file, because `rust-inv/`'s own is
+  compiled against its Rust base; `cpp-inv/` is welded the same way and takes no part. All nine pass
+  the unmodified C suite. Seen failing: with the clamp removed from the test-only Rust `SizedBottle`,
+  its row failed; with the Rust `Bottle` storing nothing, the Rust-Bottle rows failed.
+- **Kind:** K1.
+- **Cost:** about an hour. It was that cheap only because the suite had begun naming the protected
+  layer the same day.
+- **Findable by:** linking it.
+- **Changed:** REQ10/INV-6; `make test-mix`, run by `test-inverted` and so by CI.
+
 ## 2026-11-14 — `cpp-inv/` now exports the `Class_vf_*` functions
 
 - **What happened:** the client decided the open question below: `cpp-inv/` should export them. The

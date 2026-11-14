@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.7).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
-wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v9`](docs/REQUIREMENTS_v9.md)
+wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v10`](docs/REQUIREMENTS_v10.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
 [`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
@@ -159,6 +159,8 @@ a human.
 `pixi run make cpp-inv cpp-inv-gen rust-inv test-inverted` (pixi supplies libclang and rustc; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
 the `cxx::` wrapper stays at C++11, and only `CXXFLAGS` carries `-Icpp`: `cpp/SizedBottle.hpp` and
 `cpp-inv-gen/model/SizedBottle.hpp` share a basename and are different things, so the C++17 builds must not see `cpp/`.
+
+**Mixing languages (`make test-mix`, REQ10/INV-6).** A `Bottle` from C, from C++ (the C `cpp-inv-gen/` generates) or from Rust, under a `SizedBottle` from each: nine links of the unmodified C suite, run as part of `test-inverted`. Two pieces exist only for this test: `--cfg bottle_only` builds `rust-inv/` without its `SizedBottle`, and `rust-inv/test_sized_over_abi.rs` is a Rust `SizedBottle` that reaches its base only by the ABI's names, as `src/SizedBottle.c` does. `rust-inv/sized_bottle.rs` and `cpp-inv/` cannot take that role: each is compiled against its own base. A new symbol in `include/*.h` that a derived class needs must be exported by every Bottle provider, or a row of the mix stops linking.
 
 ### The Rust binding (`rust/oopc.rs`)
 
