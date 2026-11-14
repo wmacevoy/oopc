@@ -7,16 +7,15 @@ Supersedes [v9](REQUIREMENTS_v9.md); IDs keep their meaning across versions, and
 retired rather than reused. Cite each requirement with the version that last changed it: `REQ10/INV-6`,
 but still `REQ7/SHAPE-2` and `REQ2/OM-6`.
 
-Client and proxy for adopters and students: Warren MacEvoy · Directed by the client 2026-11-14; not
-yet agreed · *Tell us what is wrong with it.*
+Client and proxy for adopters and students: Warren MacEvoy · Date agreed: 2026-11-14 · *Tell us what
+is wrong with it.*
 
 **What changed from v9:** the client asked that a class written in one of C, C++ and Rust be
 extendable in any of the three, shown by a test and not by a new example. INV-6 is new, with one
 scope decision saying what stands for C++ and for Rust in that test. He then asked whether the proof
 shows polymorphism, and for the proof in pieces: "for real problems it would be the only way to
 win". PRF-5 and PRF-6 are new, with two glossary terms and one scope decision. Nothing else changed.
-Drafted by the agent from the client's direction; what it had to assume is under *Assumptions* as
-not yet confirmed.
+Drafted by the agent from the client's direction; agreed by the client, 2026-11-14.
 
 **What changed from v8 (in v9):** the client asked for a proof layer: bounded reasoning by a model checker,
 with plain finite numbers as its assumption. PRF-1 to PRF-4 are new. BLD-3 changed to say where the
@@ -312,9 +311,9 @@ a pattern shown to be understood, and the first thing an adopter must fix for pr
   2026-10-26
 - "When teaching and use as a library conflict, the pattern wins." — confirmed, 2026-11-09
 - "The caller's contract as written, three clauses, is the one meant; a stronger one that a
-  `SizedBottle` could not keep is not wanted." — not yet confirmed
+  `SizedBottle` could not keep is not wanted." — agreed with this version, 2026-11-14
 - "For 'C++' in the nine pairings, the C generated from the C++ model is what was meant, and a
-  test-only Rust `SizedBottle` is acceptable for the Rust row." — not yet confirmed
+  test-only Rust `SizedBottle` is acceptable for the Rust row." — agreed with this version, 2026-11-14
 - "Four calls is bound enough for PRF-1, given that PRF-2 has no bound." — agreed with this version,
   2026-11-14
 - "A proof that tests cannot replace is still worth a tool that pixi does not supply." — confirmed,
