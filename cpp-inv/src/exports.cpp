@@ -16,12 +16,12 @@
   method is written once, appears once in the table, and once here.
 
   DELIBERATE ABI DELTA.  Bottle_vftbl and SizedBottle_vftbl are declared by the
-  C headers but are NOT defined here.  They exist so that a derived class
-  written in C, in another translation unit, can name base slots in a static
-  initializer.  In the inverted model that job belongs to C++ inheritance, and
-  exporting a second copy of a table would be a lie.  Every other symbol in
-  those headers -- including Bottle_type and SizedBottle_type, which Type_isa
-  compares by address -- is defined.
+  C headers but are NOT defined here: the tables here are C++ objects with
+  their own names, and exporting a second copy would be a lie.  Every other
+  symbol in those headers is defined -- Bottle_type and SizedBottle_type, which
+  Type_isa compares by address, and the "protected" Class_vf_ functions at the
+  end of this file, which let a class written in C derive from this build by
+  naming its base's slots (REQ1/INV-1).
 */
 
 #include <cstdlib>
@@ -123,4 +123,30 @@ extern "C" {
 
   const ::Type *SizedBottle_getType(void)
   { return &SizedBottle_type; }
+
+  /* ---- "protected": the implementations, by their C names -------------- */
+
+  /* Each is the slot in the class's OWN table, called directly.  That is not a
+     dispatch: the table is the class's, not the object's, so these are the
+     non-virtual calls a derived class in C chains to. */
+  void Bottle_vf_fini(::Bottle *me)
+  { oopc::Class<oopc1::Bottle>::table.fini(reinterpret_cast<oopc1::Bottle *>(me)); }
+
+  double Bottle_vf_getVolume(const ::Bottle *me)
+  { return oopc::Class<oopc1::Bottle>::table.getVolume(reinterpret_cast<const oopc1::Bottle *>(me)); }
+
+  void Bottle_vf_setVolume(::Bottle *me, double value)
+  { oopc::Class<oopc1::Bottle>::table.setVolume(reinterpret_cast<oopc1::Bottle *>(me), value); }
+
+  void SizedBottle_vf_fini(::Bottle *me)
+  { oopc::Class<oopc1::SizedBottle>::table.base.fini(reinterpret_cast<oopc1::Bottle *>(me)); }
+
+  void SizedBottle_vf_setVolume(::Bottle *me, double value)
+  { oopc::Class<oopc1::SizedBottle>::table.base.setVolume(reinterpret_cast<oopc1::Bottle *>(me), value); }
+
+  double SizedBottle_vf_getMaxVolume(const ::Bottle *me)
+  { return oopc::Class<oopc1::SizedBottle>::table.getMaxVolume(reinterpret_cast<const oopc1::Bottle *>(me)); }
+
+  void SizedBottle_vf_setMaxVolume(::Bottle *me, double value)
+  { oopc::Class<oopc1::SizedBottle>::table.setMaxVolume(reinterpret_cast<oopc1::Bottle *>(me), value); }
 }

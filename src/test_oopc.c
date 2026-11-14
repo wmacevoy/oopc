@@ -27,21 +27,24 @@ struct PlainBottle      { const void *vftbl; double volume; };
 struct PlainSizedBottle { const void *vftbl; double volume; double maxVolume; };
 
 /* REQ1/OM-5: the fini slot is the virtual destructor.  To watch it, two classes
-   made here, Inner : Bottle and Outer : Inner.  They add no fields and no
-   slots, only a fini that writes its letter and chains to its base's fini with
-   a direct, non-virtual call.
+   made here the way SizedBottle.c makes one: Inner : Bottle and Outer : Inner.
+   They add no fields and no slots, only a fini that writes its letter and
+   chains to its base's fini with a direct, non-virtual call.
 
-   Their tables are copied from Bottle's at run time, so this suite needs
-   nothing but the public ABI and runs unchanged against every build of it.  A
-   real class has a const table that names its base's slots: see SizedBottle.c. */
+   Their const tables name Bottle's slots, so this also holds every build of
+   the ABI to exporting the "protected" Bottle_vf_ functions (REQ1/INV-1). */
 static char finis[8];
 static int nfinis = 0;
 
-static BottleVftbl Inner_vftbl, Outer_vftbl;
-static void (*Bottle_fini_slot)(Bottle *me);
+/* Inner is never instantiated here, so its table is not written out. */
+static void Inner_vf_fini(Bottle *me) { finis[nfinis++] = 'I'; Bottle_vf_fini(me); }
+static const Type Inner_type = { "Inner", &Bottle_type, sizeof(Bottle) };
 
-static void Inner_vf_fini(Bottle *me) { finis[nfinis++] = 'I'; Bottle_fini_slot(me); }
 static void Outer_vf_fini(Bottle *me) { finis[nfinis++] = 'O'; Inner_vf_fini(me); }
+static const Type Outer_type = { "Outer", &Inner_type, sizeof(Bottle) };
+static const BottleVftbl Outer_vftbl = {
+  &Outer_type, Outer_vf_fini, Bottle_vf_getVolume, Bottle_vf_setVolume
+};
 
 int main(void)
 {
@@ -108,14 +111,31 @@ int main(void)
   printf("\nthe virtual destructor\n");
   {
     Bottle *outer = Bottle_new();
-    Bottle_fini_slot = outer->vftbl->fini;
-    Inner_vftbl = *outer->vftbl;  Inner_vftbl.fini = Inner_vf_fini;
-    Outer_vftbl = Inner_vftbl;    Outer_vftbl.fini = Outer_vf_fini;
     outer->vftbl = &Outer_vftbl;   /* what Outer_init would do after Bottle_init */
     Bottle_delete(outer);          /* through the base: only a Bottle * is in sight */
     check("REQ1/OM-5 delete through Bottle* ran two finis", nfinis, 2);
     check("REQ1/OM-5 the derived fini first", finis[0] == 'O', 1);
     check("REQ1/OM-5 then its base's, once each", finis[1] == 'I', 1);
+    check("REQ2/TY-1 a class made here is-a Bottle", Type_isa(&Outer_type, &Bottle_type), 1);
+  }
+
+  printf("\nthe protected layer, by name: what a derived class in C may call\n");
+  {
+    /* The vf_ functions are the implementations themselves, with no dispatch.
+       A derived class calls them to inherit a slot or to chain to its base;
+       application code must not, and the second check shows why. */
+    SizedBottle *mine = malloc(Type_size(&SizedBottle_type));
+    SizedBottle_init(mine);
+    SizedBottle_vf_setMaxVolume((Bottle*)mine, 5);
+    check("REQ1/INV-1 SizedBottle_vf_getMaxVolume", SizedBottle_vf_getMaxVolume((Bottle*)mine), 5);
+    Bottle_vf_setVolume((Bottle*)mine, 100);
+    check("REQ1/INV-1 Bottle_vf_setVolume is the base's: no clamp",
+          Bottle_vf_getVolume((Bottle*)mine), 100);
+    SizedBottle_vf_setVolume((Bottle*)mine, 100);
+    check("REQ1/INV-1 SizedBottle_vf_setVolume is the override: clamps",
+          Bottle_vf_getVolume((Bottle*)mine), 5);
+    SizedBottle_vf_fini((Bottle*)mine);   /* the whole chain, called directly */
+    free(mine);
   }
 
   Bottle_delete(plain);

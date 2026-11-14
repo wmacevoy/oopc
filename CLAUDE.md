@@ -78,7 +78,7 @@ Lifecycle is split so objects can live in caller-supplied storage — the C++ wr
 - `Class_init` / `Class_fini` operate on existing memory. Derived `_init` calls base `_init` first, then **overwrites** `me->vftbl` with the derived table and sets its own fields.
 - `Class_new` / `Class_delete` are `malloc`+`_init` and `_fini`+`free`. One allocation at one address, so `free` through an upcast base pointer is correct.
 
-**The `fini` slot is the virtual destructor** (REQ1/OM-5): `Class_delete` and `Class_fini` call through it, so finalizing through a base pointer runs the dynamic class's finalizer. "No virtual destructor" in the requirements only ever meant the C++ keyword on `~cxx::Bottle`. `src/test_oopc.c` watches it with two test classes whose tables are copied at run time, so the check needs only the public ABI.
+**The `fini` slot is the virtual destructor** (REQ1/OM-5): `Class_delete` and `Class_fini` call through it, so finalizing through a base pointer runs the dynamic class's finalizer. "No virtual destructor" in the requirements only ever meant the C++ keyword on `~cxx::Bottle`. `src/test_oopc.c` watches it with two test classes made the way `SizedBottle.c` makes one, and then calls each `Class_vf_*` function by name. That holds every build of the ABI, inverted routes included, to exporting the "protected" layer (REQ1/INV-1): a route that leaves one out fails to link the C suite.
 
 **Footgun:** a derived class's `fini` slot chains to the base with a direct, non-virtual call — `Bottle_vf_fini(base)`. Writing the natural-looking `Bottle_fini(me)` re-dispatches through the vtable, lands back in the same function, and recurses forever.
 

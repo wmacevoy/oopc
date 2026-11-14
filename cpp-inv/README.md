@@ -105,15 +105,16 @@ mirrored declarations, one line is the win.
 ## Deliberate ABI delta
 
 `Bottle_vftbl` and `SizedBottle_vftbl` are declared by the C headers and are
-**not** defined here. They exist so a derived class written in C, in another
-translation unit, can name base slots in a static initializer; in the inverted
-model that job belongs to C++ inheritance, and exporting a second copy of a
-table would be a lie. The `Bottle_vf_*` and `SizedBottle_vf_*` functions are not defined either:
-the slots are thunks the header generates, with no C name. So a class written in C cannot derive
-from this build by naming base slots, though it can by copying the base's table, as
-`src/test_oopc.c` does. Every other symbol is defined, including `Bottle_type` and
+**not** defined here. The tables in this build are C++ objects with their own
+names, and exporting a second copy of a table would be a lie.
+
+Every other symbol is defined. That includes `Bottle_type` and
 `SizedBottle_type` — `Type_isa` compares `Type` addresses, so the symbol the
-header publishes and the one the vtable points at must be the same object.
+header publishes and the one the vtable points at must be the same object — and
+the "protected" `Bottle_vf_*` and `SizedBottle_vf_*` functions, so a class
+written in C can derive from this build by naming its base's slots, as
+`src/test_oopc.c` does (REQ1/INV-1). Each is one line in `src/exports.cpp`: the
+slot in the class's own table, called directly.
 
 ## Standard-layout, honestly
 
