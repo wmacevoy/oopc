@@ -9,6 +9,7 @@ Rows before #19 were written before the rename of 2026-11-14 (REQUIREMENTS_v7): 
 
 | # | Item | Versioned requirement IDs (or *chore*) | Owner | Done when | Estimate | Status | Since |
 | - | ---- | -------------------------------------- | ----- | --------- | -------- | ------ | ----- |
+| 33 | **Next.** Spike: the contracts checked for Rust, with a Rust model checker | REQ10/PRF-5, REQ10/PRF-6 | — | a FINDINGS entry says whether a Rust model checker shows `rust-inv/`'s `Bottle` meets the extender's contract and a Rust `SizedBottle` is correct over it, what toolchain that took, and what it would change in the requirements (now deferred in REQUIREMENTS_v10) | time box: half a day | ready | 2026-11-14 |
 | 4 | Add `cpp1/` and `cpp2/` to CI | REQ1/INV-1, REQ1/INV-2, REQ4/INV-4, REQ9/BLD-3 | agent | a PR that breaks `cpp1/` or `cpp2/` turns `.github/workflows/build-test.yml` red, on GCC and on clang, through pixi, and the Python suites run at Python 3.9 as well as the newest (REQ9/BLD-3) | range: 1–3 h | done | 2026-11-14 |
 | 15 | Assert the C++ model directly, with the same checks as its generated C | REQ4/INV-3 | agent | breaking the clamp in `cpp2/model/SizedBottle.hpp` alone fails the C++ model's check, and the demo no longer prints PASS on exit 0 alone | range: 1–3 h | done | 2026-11-14 |
 | 16 | Write the adopter's list of footguns | REQ7/ADP-1 | agent | one document, linked from the README, covers each footgun REQ7/ADP-1 names | range: 1–2 h | done | 2026-11-14 |
