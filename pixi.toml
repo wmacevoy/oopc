@@ -7,15 +7,22 @@ platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
 
 [dependencies]
 python = ">=3.9"
-# rust/ and rust-inv/ build with bare rustc: no cargo project, no crates (REQ7/BLD-3).
+# rust/ and rust-inv/ build with bare rustc: no cargo project, no crates (REQ8/BLD-3).
 rust = ">=1.77"
 
 [pypi-dependencies]
 libclang = "*"
 
-# The oldest Python supported (REQ7/BLD-3): `pixi run -e py39 ...`.
+# The oldest Python supported (REQ8/BLD-3): `pixi run -e py39 ...`.
 [feature.py39.dependencies]
 python = "3.9.*"
 
+# rust-inv/ for wasm32 (REQ8/BLD-5): core for that target, and node to run the
+# JS suite.  Its own environment, so the native jobs do not depend on it.
+[feature.wasm.dependencies]
+rust-std-wasm32-unknown-unknown = "*"
+nodejs = ">=22"
+
 [environments]
 py39 = ["py39"]
+wasm = ["wasm"]

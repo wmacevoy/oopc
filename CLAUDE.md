@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repository follows the [software-engineering guide](https://github.com/wmacevoy/software-engineering/tree/v1.7).
 Read [`AGENTS.md`](AGENTS.md) (the guide's working agreement, copied as-is) before acting; this file
-wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v7`](docs/REQUIREMENTS_v7.md)
+wins where they disagree. The working set is in `docs/`: [`REQUIREMENTS_v8`](docs/REQUIREMENTS_v8.md)
 (versioned, never edited in place — cite each with the version that last changed it, e.g. `REQ2/OM-6`), [`DESIGN_v1`](docs/DESIGN_v1.md)
 (structure and *why*; the mechanism stays below), [`QUEUE`](docs/QUEUE.md), and
 [`FINDINGS`](docs/FINDINGS.md). `./se --doctor` checks the adoption against the guide.
@@ -148,6 +148,11 @@ a human.
   (`me`/`me_mut`). The object's `vftbl` field is a **raw pointer**, not a
   reference: it is cast back to the derived table, and a reference to the base
   table would not cover the longer one. It does not trace.
+  `make test-rust-inv-wasm` builds the same sources for wasm32
+  (`bin/oopc.rust-inv.wasm`: the raw wasm build with the two classes from Rust)
+  and runs `js/test_oopc.mjs` on it through `OOPC_WASM`. It needs `WASM_CC` and
+  `WASI_SYSROOT` as `wasm-raw` does, and `pixi run -e wasm` for wasm32's `core`
+  and node.
 
 `pixi run make cpp-inv cpp-inv-gen rust-inv test-inverted` (pixi supplies libclang and rustc; `pixi.toml`, no lock file committed; `-e py39` runs at the Python floor). `CXX17FLAGS` is separate from `CXXFLAGS` because
 the `cxx::` wrapper stays at C++11, and only `CXXFLAGS` carries `-Icpp`: `cpp/SizedBottle.hpp` and
@@ -190,7 +195,7 @@ Neither binding has per-class C code. Adding a class means adding a C class and 
 
 ## CI
 
-`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp-inv/`, `cpp-inv-gen/`, `rust/` and `rust-inv/` through pixi on Linux and macOS at Python 3.9 and the newest; and a release job on `v*` tags. Artifacts upload per platform.
+`.github/workflows/build-test.yml` — a native matrix (linux x64/arm64, macOS arm64) running the warning-free build, the test suite, UBSan and a tracing build; a wasm job that installs emsdk, builds, runs the JS suite, and asserts that `-DDEBUG` traces actually reach the JS console; a raw-wasm job (pinned wasi-sdk, no Emscripten) running the JS suite; an i386 job running the C and C++ suites at `-m32`; an `inverted` job running `cpp-inv/`, `cpp-inv-gen/`, `rust/` and `rust-inv/` through pixi on Linux and macOS at Python 3.9 and the newest; a `rust-inv-wasm` job running the JS suite on `rust-inv/` built for wasm32; and a release job on `v*` tags. Artifacts upload per platform.
 
 ## Known issues
 

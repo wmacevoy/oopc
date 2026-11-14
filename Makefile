@@ -69,7 +69,7 @@ $(SHLIB) : $(OBJS)
 
 .PHONY: all clean test test-c test-cpp test-python test-js wasm wasm-raw wasm-debug emcc-build \
         cpp-inv cpp-inv-gen gen test-cpp-inv test-cpp-inv-gen test-inverted \
-        rust test-rust rust-inv test-rust-inv
+        rust test-rust rust-inv test-rust-inv rust-inv-wasm test-rust-inv-wasm
 
 all : bin/cbottle bin/cppbottle $(SHLIB)
 
@@ -319,6 +319,25 @@ test-rust-inv : bin/cbottle bin/cbottle-rust-inv bin/test_c-rust-inv bin/test_ru
 	@echo "rust-inv: unmodified Rust binding over the Rust build: PASS"
 	@OOPC_LIB=$(SHLIB_RUSTINV) $(PYTHON) python/test_oopc.py > /dev/null \
 	  && echo "rust-inv: unmodified Python binding against liboopc-rust-inv: PASS"
+
+# rust-inv for wasm32: the raw wasm build above, with the two classes coming
+# from Rust.  Type.c and Trace.c are still C, compiled by the same clang; no
+# libc and no Rust library is linked, and malloc/free stay imports.  rustc
+# needs core for wasm32-unknown-unknown, which the pixi `wasm` environment has.
+tmp/rust-inv.wasm.o : $(RUSTINV_SRCS)
+	$(RUSTC) $(RUSTFLAGS) --target wasm32-unknown-unknown --crate-type=lib --emit=obj -O -C panic=abort -o $@ $<
+
+bin/oopc.rust-inv.wasm : tmp/rust-inv.wasm.o src/Type.c src/Trace.c $(wildcard include/*.h)
+	@test -d $(WASI_SYSROOT) || { echo "no wasi-libc sysroot at $(WASI_SYSROOT); set WASI_SYSROOT=<dir>"; exit 1; }
+	$(WASM_CC) --target=wasm32-wasip1 --sysroot=$(WASI_SYSROOT) -nostdlib -O2 -Iinclude \
+	  -Wl,--no-entry -Wl,--export-all -Wl,--allow-undefined -o $@ tmp/rust-inv.wasm.o src/Type.c src/Trace.c
+
+rust-inv-wasm : bin/oopc.rust-inv.wasm
+
+test-rust-inv-wasm : bin/oopc.rust-inv.wasm
+	@OOPC_WASM=bin/oopc.rust-inv.wasm $(NODE) js/test_oopc.mjs > tmp/test_js-rust-inv.out \
+	  || { cat tmp/test_js-rust-inv.out; exit 1; }
+	@echo "rust-inv: unmodified JS binding over the Rust wasm build: PASS"
 
 test-inverted : test-cpp-inv test-cpp-inv-gen test-rust-inv
 	@echo "Inverted models: PASS"

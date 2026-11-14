@@ -34,6 +34,19 @@ One line each, by the named judge of a *(judged)* requirement (SE1/W11).
   REQ7/RS-3); the swap is checked in `rust/test_oopc.rs` and the size is a compile-time assert, each
   seen failing; ADOPTING lists the footgun.
 
+## 2026-11-14 — `rust-inv/` built for wasm32 unchanged
+
+- **What happened:** the client asked for a wasm build of the Rust. The `rust-inv/` sources compiled
+  for `wasm32-unknown-unknown` with no change, and the module has the same three imports (`malloc`,
+  `free`, `vprintf`) and the same 36 class and type exports as the C raw build: 2,947 bytes against
+  3,066. The JS suite passed on it, and failed (REQ2/BND-1) with the clamp removed from
+  `rust-inv/sized_bottle.rs`. One surprise: `js/load.mjs` fetches a relative path and reads an
+  absolute one, so the suite resolves `OOPC_WASM` first.
+- **Kind:** K1 — a question with a cheap answer.
+- **Cost:** none.
+- **Findable by:** building it.
+- **Changed:** REQ8/BLD-5; a `rust-inv-wasm` CI job; `OOPC_WASM` in `js/test_oopc.mjs`.
+
 ## 2026-11-14 — the Rust suite did not link on Linux arm64
 
 - **What happened:** the first CI run of `make test-rust` failed on `ubuntu-24.04-arm` only:

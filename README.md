@@ -198,6 +198,12 @@ make rust-inv test-rust-inv            # Rust as the source                 (nee
 make test-inverted                     # all three inverted routes
 ```
 
+`rust-inv/` also builds for wasm32, and the JS suite runs on it unchanged:
+
+```bash
+pixi run -e wasm make test-rust-inv-wasm WASM_CC=/path/to/clang WASI_SYSROOT=/path/to/wasi-sysroot
+```
+
 `pixi run make …` supplies libclang and rustc from `pixi.toml`.
 
 WebAssembly needs Emscripten, which CI installs — see
