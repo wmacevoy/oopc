@@ -29,7 +29,9 @@ struct SizedBottleStruct { const SizedBottleVftbl *vftbl; double volume;
                            double maxVolume; };
 ```
 
-Dispatch is **one vtable pointer per object, one vtable per class**:
+Dispatch is **one vtable pointer per object, one vtable per class**, and the
+first slot, `fini`, is the **virtual destructor**: `Bottle_delete` on a
+`SizedBottle` runs `SizedBottle`'s finalizer, then `Bottle`'s.
 
 ```c
 double Bottle_getVolume(const Bottle *me) { return me->vftbl->getVolume(me); }
@@ -167,6 +169,11 @@ that shows the mechanism; the inverted models show what it costs to stop
 maintaining it by hand.
 
 ## A proof, not only tests
+
+Optional, and worth more as more code is written by agents. Fluent code looks
+right whether or not it is. A proof is the medicine for that: it lets you know
+that something works, or is safe, without having to read it — you read the
+claims and the assumptions, and the checker answers for the code.
 
 A test checks the cases someone thought of. `proof/oopc_proof.c` states the same
 claims for a bounded model checker (CBMC), which checks them for **every** class,

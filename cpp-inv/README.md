@@ -108,7 +108,10 @@ mirrored declarations, one line is the win.
 **not** defined here. They exist so a derived class written in C, in another
 translation unit, can name base slots in a static initializer; in the inverted
 model that job belongs to C++ inheritance, and exporting a second copy of a
-table would be a lie. Every other symbol is defined, including `Bottle_type` and
+table would be a lie. The `Bottle_vf_*` and `SizedBottle_vf_*` functions are not defined either:
+the slots are thunks the header generates, with no C name. So a class written in C cannot derive
+from this build by naming base slots, though it can by copying the base's table, as
+`src/test_oopc.c` does. Every other symbol is defined, including `Bottle_type` and
 `SizedBottle_type` — `Type_isa` compares `Type` addresses, so the symbol the
 header publishes and the one the vtable points at must be the same object.
 

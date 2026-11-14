@@ -6,6 +6,15 @@
   STEPS calls, every argument.  Each assert below is therefore a claim about
   all of those executions at once, and a failure comes with a counterexample.
 
+  WHY, when the tests already pass.  This proof is optional: the pattern
+  stands without it, and `make test` does not run it.  It matters most where
+  code is written faster than anyone reads it, which is what an agent does.
+  Fluent code looks right whether or not it is, and a proof is the medicine for
+  that fluency: it lets a person know that something works, or is safe, WITHOUT
+  HAVING TO READ IT.  Read the claims below and the three assumptions, about a
+  page; the checker answers for every line behind them, and again after every
+  change.
+
   Each side of the C ABI assumes something of the other.  This proof's own
   assumptions are written as __CPROVER_assume and are the whole list:
 

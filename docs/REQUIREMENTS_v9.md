@@ -7,14 +7,19 @@ Supersedes [v8](REQUIREMENTS_v8.md); IDs keep their meaning across versions, and
 retired rather than reused. Cite each requirement with the version that last changed it: `REQ9/PRF-1`,
 but still `REQ7/SHAPE-2` and `REQ2/OM-6`.
 
-Client and proxy for adopters and students: Warren MacEvoy · Directed by the client 2026-11-14; not
-yet agreed · *Tell us what is wrong with it.*
+Client and proxy for adopters and students: Warren MacEvoy · Date agreed: 2026-11-14 · *Tell us what
+is wrong with it.*
 
 **What changed from v8:** the client asked for a proof layer: bounded reasoning by a model checker,
 with plain finite numbers as its assumption. PRF-1 to PRF-4 are new. BLD-3 changed to say where the
-checker comes from. Two scope decisions, one deferred item and two glossary terms follow. Nothing
-else changed. Drafted by the agent from the client's direction; what it had to assume is listed
-under *Assumptions* as not yet confirmed.
+checker comes from. Two scope decisions, one deferred item and two glossary terms follow.
+
+Reading it, the client found "no virtual destructor" where he remembered having one. The pattern
+has one and always did: the `fini` slot (OM-5). What is refused is the C++ keyword `virtual` on the
+wrapper's destructor. The glossary now says what the virtual destructor is, and OM-5, *Says no to*
+and the scope decision are reworded to say so; none changed in meaning, so `REQ1/OM-5` stays current.
+The proof is optional, and a scope decision says why it is here anyway. Drafted by the agent from
+the client's direction; agreed by the client with that change, 2026-11-14.
 
 **What changed from v7 (in v8):** the client asked for a wasm build of the Rust, and for a self-test of the
 class in the Rust constructor. BLD-5 is new: `rust-inv/` builds for wasm32 and passes the JS suite.
@@ -59,6 +64,7 @@ The terms in [v1](REQUIREMENTS_v1.md#glossary), unchanged, and these:
 | principle direction | The C API wrapped as another language's API (`cpp/`, `rust/`). |
 | inverted direction | Another language's API wrapped as the C API (`cpp-inv/`, `cpp-inv-gen/`, `rust-inv/`), which then serves as the gateway. |
 | view | In the Rust binding, a type that stands for a C object and owns no bytes: `&Bottle` is the C `Bottle *`. |
+| virtual destructor | The `fini` slot: the first method slot of every vtable. `Class_delete` and `Class_fini` call through it, so finalizing through a base pointer runs the dynamic class's finalizer, which chains to its base's. |
 | bounded proof | A model checker's check of every execution up to a stated number of calls, for every input its assumptions allow. It says nothing past the bound, except where a step is shown to preserve an invariant from any state. |
 | assumption (K4) | Something a proof, or one side of the gateway, takes as true and does not check. |
 | owner | In the Rust binding, the one pointer that holds an object C allocated and deletes it when dropped. |
@@ -104,8 +110,8 @@ Mechanisms are in the design and [`CLAUDE.md`](../CLAUDE.md#architecture).
   that, patch releases, as a guideline. A new major version is allowed and unlikely.
 - **Foundation:** `SE1`
 - **Says no to:** multiple inheritance, interfaces and generics (they do not map 1:1 onto every host);
-  generating `src/` (hand-written on purpose); a virtual destructor in the wrapper (a second vtable
-  pointer); extension modules (per-class glue); per-target `#if` (SHAPE-5); a more interesting domain
+  generating `src/` (hand-written on purpose); the C++ keyword `virtual` on the wrapper's destructor (a
+  second vtable pointer; the destructor is already virtual, through the `fini` slot); extension modules (per-class glue); per-target `#if` (SHAPE-5); a more interesting domain
   (it distracts).
 - **Exceptions:** the `__GNUC__` guard in `Trace.h`, which only turns on compiler checks (RD-1).
   `cpp-inv/` is C++17, `cpp-inv-gen/` needs libclang and the Rust examples need `rustc`, because each
@@ -144,8 +150,8 @@ presents it. An adopter inherits the footguns, so ADP-1 is written for them.
 - **OM-3** *(since v2)* No function pointer is ever cast — a mistyped slot is a compile error — and
   vtables are `const`, initialized at compile time.
 - **OM-4** *(retired in v2: merged into OM-3)*
-- **OM-5** *(since v1)* Deleting a derived object through its base finalizes the derived part, then
-  the base, once each.
+- **OM-5** *(since v1)* The destructor is virtual: deleting a derived object through its base
+  finalizes the derived part, then the base, once each.
 - **OM-6** *(since v2)* A `SizedBottle` always holds `0 ≤ volume ≤ maxVolume`: `setVolume` clamps
   into that range; `setMaxVolume` stores a negative as 0 and lowers the volume if it now exceeds the
   max. A new one has volume 0 and max 1. NaN is outside the contract.
@@ -285,9 +291,10 @@ a pattern shown to be understood, and the first thing an adopter must fix for pr
 - "wasm32 is a target, and portability that costs no readability is wanted." — confirmed,
   2026-10-26
 - "When teaching and use as a library conflict, the pattern wins." — confirmed, 2026-11-09
-- "Four calls is bound enough for PRF-1, given that PRF-2 has no bound." — not yet confirmed
-- "A proof that tests cannot replace is still worth a tool that pixi does not supply." — not yet
-  confirmed
+- "Four calls is bound enough for PRF-1, given that PRF-2 has no bound." — agreed with this version,
+  2026-11-14
+- "A proof that tests cannot replace is still worth a tool that pixi does not supply." — confirmed,
+  2026-11-14: optional, and very important for code an agent writes
 - "A wasm build of the Rust means `rust-inv/` as a raw wasm module under the JS suite. `rust/`, the
   binding, is not built for wasm: its suite would need a WASI runtime. Neither is built for 32-bit
   x86." — confirmed, 2026-11-14: wasm is for `rust-inv/` only, one way; no Rust binding in wasm
@@ -301,8 +308,13 @@ a pattern shown to be understood, and the first thing an adopter must fix for pr
 ## Scope decisions
 
 - Single inheritance only — the case that maps 1:1 onto every host language.
-- C++ polymorphism through references, never `delete` through a base pointer — a virtual destructor
-  would add a second vtable pointer (CXX-2).
+- The wrapper's destructor is not `virtual` in C++, so C++ polymorphism goes through references, never
+  `delete` through a base pointer — the keyword would add a second vtable pointer (CXX-2). Nothing is
+  lost in finalizing: `~cxx::Bottle` calls through the `fini` slot. What `delete` through a base gets
+  wrong is the size it frees ([FINDINGS](FINDINGS.md) 2026-11-14).
+- The proof is optional — the pattern stands without it and `make test` does not need it (BLD-3). It
+  is here because code is now written faster than it is read: a proof lets a person know that
+  something works, or is safe, by reading its claims and assumptions and not the code.
 - NaN is not handled — the NaN-safe comparison costs a student a paragraph (OM-6). The proof shows NaN
   is the only number that breaks OM-6: with infinities allowed and NaN excluded it still passes
   ([FINDINGS](FINDINGS.md) 2026-11-14).
