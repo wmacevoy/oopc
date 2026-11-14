@@ -37,11 +37,17 @@ extern "C" {
     fn Type_of(object: *const c_void) -> *const c_void;
     fn Type_name(type_: *const c_void) -> *const c_char;
 
+    fn Bottle_getType() -> *const c_void;
     fn Bottle_new() -> *mut Bottle;
     fn Bottle_delete(me: *mut Bottle);
     fn Bottle_getVolume(me: *const Bottle) -> f64;
     fn Bottle_setVolume(me: *mut Bottle, value: f64);
 
+    /* `--cfg wrong_new` is a fault on request: this declaration bound to the
+       wrong C function.  make test-rust builds the suite that way once and
+       expects the constructor's self-test to refuse (REQ8/RS-5). */
+    fn SizedBottle_getType() -> *const c_void;
+    #[cfg_attr(wrong_new, link_name = "Bottle_new")]
     fn SizedBottle_new() -> *mut SizedBottle;
     fn SizedBottle_getMaxVolume(me: *const SizedBottle) -> f64;
     fn SizedBottle_setMaxVolume(me: *mut SizedBottle, value: f64);
@@ -61,7 +67,7 @@ pub struct Bottle {
 
 impl Bottle {
     pub fn new() -> Owned<Bottle> {
-        unsafe { Owned::from_new(Bottle_new()) }
+        unsafe { Owned::from_new(Bottle_new(), Bottle_getType()) }
     }
 
     pub fn get_volume(&self) -> f64 {
@@ -89,7 +95,7 @@ pub struct SizedBottle {
 
 impl SizedBottle {
     pub fn new() -> Owned<SizedBottle> {
-        unsafe { Owned::from_new(SizedBottle_new()) }
+        unsafe { Owned::from_new(SizedBottle_new(), SizedBottle_getType()) }
     }
 
     pub fn get_max_volume(&self) -> f64 {
@@ -136,11 +142,25 @@ pub struct Owned<T> {
 }
 
 impl<T> Owned<T> {
-    /* `me` is what Class_new returned.  Private, so every T here is a class in
-       the Bottle hierarchy.  Null means malloc failed; there is no object to
-       give back, so this panics rather than hand out a dangling owner. */
-    unsafe fn from_new(me: *mut T) -> Owned<T> {
-        Owned { me: NonNull::new(me).expect("Class_new returned null: out of memory") }
+    /* `me` is what Class_new returned, and `class` is Class_getType().
+       Private, so every T here is a class in the Bottle hierarchy.  Null means
+       malloc failed; there is no object to give back, so this panics rather
+       than hand out a dangling owner.
+
+       The self-test: the object C built must be of the class this side
+       declared.  One pointer comparison, and it is the one thing Rust can check
+       about the extern block above -- a constructor bound to the wrong C
+       function stops here, not at the first call through a slot its vtable does
+       not have (REQ8/RS-5). */
+    unsafe fn from_new(me: *mut T, class: *const c_void) -> Owned<T> {
+        let me = NonNull::new(me).expect("Class_new returned null: out of memory");
+        if Type_of(me.as_ptr() as *const c_void) != class {
+            let built = CStr::from_ptr(Type_name(Type_of(me.as_ptr() as *const c_void)));
+            let declared = CStr::from_ptr(Type_name(class));
+            Bottle_delete(me.as_ptr().cast());
+            panic!("self-test: Class_new built a {:?}, not a {:?}", built, declared);
+        }
+        Owned { me }
     }
 }
 

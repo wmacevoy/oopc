@@ -50,13 +50,25 @@ are, not rewritten.
 change makes the link fail on an undefined `core::…` symbol, the code now needs
 something from Rust's libraries, and the object-file build no longer fits.
 
+## The same sources as wasm
+
+```bash
+pixi run -e wasm make test-rust-inv-wasm WASM_CC=/path/to/clang WASI_SYSROOT=/path/to/wasi-sysroot
+```
+
+That builds `bin/oopc.rust-inv.wasm`: the raw wasm build described in the main
+README, with `Bottle` and `SizedBottle` coming from this directory and
+`src/Type.c` and `src/Trace.c` still C. No libc and no Rust library is linked;
+`malloc` and `free` stay imports the host supplies. `js/test_oopc.mjs` runs on
+it unchanged, chosen by `OOPC_WASM` (REQ8/BLD-5).
+
 ## What it does not do
 
 - **It does not trace.** `TRACE` is a C macro over a variadic function; the C
   demo's output is identical without it.
 - **It has no Rust-side demo.** The Rust suite in `rust/` runs against it
   through the C ABI instead: Rust, over C, over Rust.
-- **It runs on the 64-bit native targets only.** Not 32-bit x86 or wasm32.
+- **It is not built for 32-bit x86.** 64-bit native and wasm32 only.
 - **The `vftbl` field is a raw pointer, not a `&'static BottleVftbl`.** A
   derived object points at a longer table and casts back to it; a reference to
   the base table would not cover the rest.

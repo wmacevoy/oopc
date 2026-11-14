@@ -2,7 +2,7 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { bind } from "./oopc.mjs";
 import { loadRaw, loadEmscripten } from "./load.mjs";
 
@@ -17,6 +17,13 @@ function check(label, got, want) {
 }
 
 async function load() {
+  // OOPC_WASM names an alternative raw build of the SAME C ABI, as OOPC_LIB
+  // does for python/oopc.py:  OOPC_WASM=bin/oopc.rust-inv.wasm node js/test_oopc.mjs
+  const other = process.env.OOPC_WASM;
+  if (other) {
+    if (!existsSync(other)) { console.error(`OOPC_WASM=${other}: no such file`); process.exit(1); }
+    return [`raw wasm (${other})`, await loadRaw(resolve(other))];
+  }
   const em = join(root, "bin", "oopc.js");
   if (existsSync(em)) return ["emscripten", await loadEmscripten(em)];
   const raw = join(root, "bin", "oopc.raw.wasm");

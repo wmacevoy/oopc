@@ -1,6 +1,6 @@
 # Design — v1
 
-How the requirements in [REQUIREMENTS_v7](REQUIREMENTS_v7.md) are met, and what was rejected. The
+How the requirements in [REQUIREMENTS_v8](REQUIREMENTS_v8.md) are met, and what was rejected. The
 mechanism itself — layout rules, the five wrapper rules, the fini footgun — is in
 [`CLAUDE.md`](../CLAUDE.md#architecture), which stays the one place it is written
 ([SE1/D6](https://github.com/wmacevoy/software-engineering/blob/v1.7/guide/05-design.md#d6)). This
@@ -109,10 +109,12 @@ Everything else (the tracing, the inverted models) serves teaching, not a requir
   line, and the downcast is written once per class — rejected: `macro_rules!` thunks (shorter, harder
   to read beside `src/`), a procedural macro (crates; output unseen) — source: this session
   *(inferred: the client asked for the route, not the mechanism)*.
-- **`rust-inv/` builds to one object file** — REQ7/INV-5, REQ7/BLD-3 — it links like a C object on
+- **`rust-inv/` builds to one object file** — REQ7/INV-5, REQ8/BLD-3 — it links like a C object on
   every platform with the Makefile's existing rules — rejected: a `staticlib` (needs a per-platform
   whole-archive flag for the shared library, and bundles `core`), a `cdylib` (does not export the C
-  objects linked into it) — source: this session's trial.
+  objects linked into it) — source: this session's trial. The same choice gives the wasm build
+  (REQ8/BLD-5): the object is linked by the clang that builds `src/Type.c` for wasm, exactly as the
+  raw wasm build links its C.
 
 ## Deferred
 
