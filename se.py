@@ -26,23 +26,31 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from collections import namedtuple
 from pathlib import Path
 
-RELEASE = "v1.3"
+RELEASE = "v1.7"
 # sha256 of AGENTS.md at RELEASE. `se --self` checks it in the guide's tree; the release commit sets it.
-AGENTS_SHA256 = "feba28c50a5ceb9355f64175864cb08450690feed78d10b303205c13da068af7"
+AGENTS_SHA256 = "b7e05f63f92afa0188c67d6f59354bfc24b831c74ae1e5194811be4f5b226f21"
 GUIDE_REPO = "wmacevoy/software-engineering"
 LOW_DISK_GB = 10        # warn below (invented)
 NO_DISK_GB = 2          # fail below (invented)
+COMPACTION_NEW_SECONDS = 120  # a record this recent is the compaction that fired the hook (invented)
 STALE_DAYS = 7          # a queue row in progress this long with no movement is torn work (invented)
 CACHE_STALE_DAYS = 30   # a release check older than this is reported as stale (invented)
 
 Finding = namedtuple("Finding", "name ids state text fix")  # state: pass | warn | none yet | fail
 PASS, WARN, NONE, FAIL = "pass", "warn", "none yet", "fail"
 LABEL_RE = re.compile(r"This copy is\s+from\s+\*\*(v\d+\.\d+)\*\*")  # \s+: copies are wrapped at 100 columns, and the label can break across a line
-REQ_ID_RE = re.compile(r"\*\*([A-Z]{2,}-\d+)\*\*\s*\*\(since v(\d+)\)\*")
+# A bullet (`- **UI-1** *(since v1)*`) or a table row (`| **UI-1** | *(since v1)* ... |`)
+REQ_ID_RE = re.compile(r"\*\*([A-Z]{2,}-\d+)\*\*\s*(?:\|\s*)?\*\(since v(\d+)\)\*")
+# The marks that follow, as in `*(since v2)* *(inferred)* *(judged)*`; prose further on is not a mark (SE1/U10).
+REQ_MARKS_RE = re.compile(REQ_ID_RE.pattern + r"((?:\s*(?:\|\s*)?\*\([^)\n]*\)\*)*)")
+VERDICT_RE = re.compile(r"\bverdict\b:?\s*(pass|passed|yes|accepted|fail|failed|no|rejected)\b", re.I)
+JUDGE_RE = re.compile(r"\bby\s+(.+?)\s*(?:[,;]|\s\d{4}-|\.?$)")
+DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 # The line that names this guide's release, in every release's AGENTS.md. A sibling guide's agreement
 # (the data-mining guide's) links SE1's AGENTS.md as a blob and carries a label of its own release, so
 # the label alone does not say whose copy a file is.
@@ -182,9 +190,32 @@ def tracked_files(repo):
     return [Path(repo) / f for f in out.split("\0") if f]
 
 
+def own_files(repo):
+    """(tracked files that are this repository's own, the vendored trees left out). A tree under a top-level
+    vendor/ is another repository's: its IDs, tests, and verdicts answer to its own requirements. Only the
+    top level, so a false failure elsewhere stays to be read; a file silently unread could not be."""
+    own, left_out = [], set()
+    for f in tracked_files(repo):
+        parts = f.relative_to(repo).parts
+        if parts[0] == "vendor" and len(parts) > 1:
+            left_out.add("/".join(parts[:2]))
+        else:
+            own.append(f)
+    return own, sorted(left_out)
+
+
+def left_out_note(left_out):
+    """What the row did not read, so its pass is not read as covering it (SE1/U7)."""
+    if not left_out:
+        return ""
+    return f"; left out, as vendored: {', '.join(left_out[:3])}" + (f" and {len(left_out) - 3} more" if len(left_out) > 3 else "")
+
+
 def is_text(path):
-    return path.suffix.lower() in {".md", ".txt", ".py", ".js", ".ts", ".c", ".h", ".sh", ".yml", ".yaml",
-                                   ".toml", ".json", ".rs", ".go", ".java", ".rb", ".ps1", ".cfg", ".ini", ""}
+    return path.suffix.lower() in {".md", ".txt", ".py", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx",
+                                   ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".cs", ".kt", ".swift",
+                                   ".sh", ".yml", ".yaml", ".toml", ".json", ".rs", ".go", ".java", ".rb",
+                                   ".ps1", ".cfg", ".ini", ""}
 
 
 def settings(repo):
@@ -199,7 +230,24 @@ def settings(repo):
 
 # ---------------------------------------------------------------- the doctor's checks
 
+def foundation_pin(repo):
+    """What the fundamental shape's Foundation line pins: (name, [major, minor, patch] as far as written), or None."""
+    req, _, _ = latest_requirements(repo)
+    section = re.search(r"^##\s+(?:Fundamental )?[Ss]hape\s*$(.*?)(?=^##\s|\Z)", read(req), re.M | re.S) if req else None
+    m = re.search(r"\*\*Foundation:\*\*\s*`?(SE(\d+(?:\.\d+){0,2})?)(?![\w.])", section.group(1)) if section else None
+    return (m.group(1), [int(x) for x in m.group(2).split(".")] if m.group(2) else []) if m else None
+
+
 def check_copy(repo, rel):
+    """The row itself; a pin to an exact release is marked on whatever it says, since nothing else warns of its cost."""
+    f = copy_row(repo, rel)
+    pin = foundation_pin(repo)
+    if pin and len(pin[1]) == 3 and f.state != FAIL:
+        return f._replace(text=f"FRAGILE, pinned to exactly {pin[0]}: it takes no fix, and nothing warns of a newer release; {f.text}")
+    return f
+
+
+def copy_row(repo, rel):
     path, label = find_copy(repo)
     if not path:
         return Finding("working agreement", "SE1/U7", FAIL, "no AGENTS.md, and CLAUDE.md imports none",
@@ -217,18 +265,29 @@ def check_copy(repo, rel):
     known = rel.get("sha", {}).get(label) or (AGENTS_SHA256 if label == RELEASE else None)
     where = str(path.relative_to(repo)) if str(path).startswith(str(repo)) else str(path)
     minor = lambda v: tuple(int(x) for x in v[1:].split(".")[:2])
+    pin = foundation_pin(repo)
+    if pin and any(a != b for a, b in zip(pin[1][:2], minor(label))):
+        return Finding("working agreement", "SE1/U7", FAIL, f"{where} is {label}, and the fundamental shape's Foundation says {pin[0]}",
+                       "re-copy it at the Foundation's release, or move the Foundation in a new requirements version")
     if rel.get("sha", {}).get(newest) == digest:  # the same text as the newest release: current, whatever the label
         return Finding("working agreement", "SE1/U7", PASS, f"{where} is {label}, the same text as {newest}, the newest release", "")
-    if label != newest and minor(label) < minor(newest):
-        return Finding("working agreement", "SE1/U7", FAIL, f"{where} is {label}; {newest} is out",
-                       f"read *For copies* under {newest} in the guide's CHANGELOG, then re-copy")
+    behind = label != newest and minor(label) < minor(newest)
+    # Unpinned or SE1.7: any newer minor warns. SE1 or SE: only a new major. SE1.7.3: nothing does.
+    warns = behind and (not pin or len(pin[1]) == 2 or (len(pin[1]) < 2 and minor(label)[0] < minor(newest)[0]))
+    if warns:
+        how = "then move the Foundation and re-copy" if pin else ("then re-copy, or set how much warns: "
+                                                                  "the Foundation line in the requirements template")
+        return Finding("working agreement", "SE1/U7", WARN, f"{where} is {label}; {newest} is out",
+                       f"read *For copies* under {newest} in the guide's CHANGELOG, {how}")
     if known and digest != known:
         return Finding("working agreement", "SE1/U7", FAIL, f"{where} says {label} but its text differs from the release's",
                        "it was edited, or copied from an unreleased commit; local rules go in the repository guide")
     if not known:
         return Finding("working agreement", "SE1/U7", WARN, f"{where} is {label}; its text could not be compared "
                        "(no hash for that release here)", "run with the network once to fetch the release's hash")
-    return Finding("working agreement", "SE1/U7", PASS, f"{where} is {label}, the newest known, unedited", "")
+    if behind:
+        return Finding("working agreement", "SE1/U7", PASS, f"{where} is {label}, unedited, as its Foundation {pin[0]} allows; {newest} is out", "")
+    return Finding("working agreement", "SE1/U7", PASS, f"{where} is {label}, unedited; the newest known is {newest}", "")
 
 
 def check_loads(repo):
@@ -269,6 +328,22 @@ def check_loads(repo):
                    "copy AGENTS.md to the root, or import the copy from a CLAUDE.md")
 
 
+def check_quickref(repo):
+    """The condensed guide in every working agent's context. Only CLAUDE.md does it: a hook's output is capped at 10,000
+    characters, and over that the agent gets a path and a preview (../compaction, CLAUDE-CODE-DOCS-2026-10-27.md)."""
+    repo = Path(repo).resolve()
+    fix = "add a line `@vendor/se1/QUICKREF.md` to the root CLAUDE.md, beside `@AGENTS.md` (ADOPT.md step 2)"
+    claude = repo / "CLAUDE.md"
+    found = [p for p in claude_imports(claude) if p.name == "QUICKREF.md"] if claude.is_file() else []
+    if not found:
+        return Finding("quick reference", "SE1/A11", FAIL, "the root CLAUDE.md does not import QUICKREF.md, so a working agent can skip it", fix)
+    if not found[0].is_file():
+        return Finding("quick reference", "SE1/A11", FAIL, f"CLAUDE.md imports {found[0].name}, which is not there", fix)
+    return Finding("quick reference", "SE1/A11", PASS,
+                   "[Claude Code configuration] CLAUDE.md imports it, so it loads at each start and after each compaction; "
+                   "Explore and Plan start without CLAUDE.md. Observed loading: the phrase test (ADOPT.md step 2)", "")
+
+
 def hook_commands(s):
     """Yield (event, matcher, command) for every command hook in a settings dict."""
     for event, entries in (s.get("hooks") or {}).items():
@@ -296,10 +371,10 @@ def check_hooks(repo):
     return Finding("handoff hook", "SE1/A11", PASS, f"[Claude Code configuration] {names}: configured, not seen to fire", "make it fire once on purpose (SE1/T3)")
 
 
-def guide_command(text):
+def guide_command(text, fallback=True):
     """The check command a repository guide names: the template's "**The full check:**" line, its inline
-    code or the first line of the fenced block after it; failing that, the first line that names a check
-    or test with code on it."""
+    code or the first line of the fenced block after it; failing that, with fallback, the first line that
+    names a check or test with code on it."""
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if re.search(r"\*\*The full check:?\*\*", line):
@@ -314,6 +389,8 @@ def guide_command(text):
                         if lines[k].strip():
                             return lines[k].strip()
                     break
+    if not fallback:
+        return None
     for line in lines:
         if re.search(r"\b(check|test)s?\b", line, re.I) and "`" in line and not line.lstrip().startswith("#"):
             m = re.search(r"`([^`]+)`", line)
@@ -327,7 +404,9 @@ def check_guide(repo):
         text = read(Path(repo) / name)
         if not text:
             continue
-        cmd = guide_command(text)
+        # A README is prose: on one course repository the fallback took a workflow path from a line that
+        # mentioned tests for the check command. Only a labeled line counts there.
+        cmd = guide_command(text, fallback=(name != "README.md"))
         if cmd:
             return Finding("repository guide", "SE1/A2, SE1/W10", PASS, f"{name} names the check: `{cmd}`", ""), cmd
         if re.search(r"none yet", text, re.I):
@@ -343,13 +422,13 @@ def check_working_set(repo):
     req, version, ids = latest_requirements(repo)
     if not req:
         docs = Path(repo) / "docs"
-        # Name what is there when it is not SE1's shape: a project that follows another guide (QUESTION_vN,
-        # LEDGER, ...) was told "no REQUIREMENTS" as if docs/ were empty. se checks SE1's shape only.
+        # Name what is there when it is not SE1's layout: a project that follows another guide (QUESTION_vN,
+        # LEDGER, ...) was told "no REQUIREMENTS" as if docs/ were empty. se checks SE1's layout only.
         others = sorted(p.stem for p in docs.glob("*.md")) if docs.is_dir() else []
         others = [n for n in others if n not in ("QUEUE", "FINDINGS") and not re.match(r"(REQUIREMENTS|DESIGN)_v\d+$", n)]
         if others:
             shown = ", ".join(others[:5]) + (f" and {len(others) - 5} more" if len(others) > 5 else "")
-            return Finding("working set", "SE1/W10", NONE, f"no docs/REQUIREMENTS_vN.md; docs/ holds {shown}, which is not SE1's shape",
+            return Finding("working set", "SE1/W10", NONE, f"no docs/REQUIREMENTS_vN.md; docs/ holds {shown}, which is not SE1's layout",
                            "if the project follows another guide, that guide's checker says whether its set is complete; "
                            "se checks SE1's (REQUIREMENTS_vN, DESIGN_vN, QUEUE, FINDINGS) only")
         return Finding("working set", "SE1/W10", NONE, "no docs/REQUIREMENTS_vN.md",
@@ -369,25 +448,44 @@ def check_working_set(repo):
                    f"REQUIREMENTS_v{version} ({len(ids)} requirements), DESIGN, QUEUE, FINDINGS; Non-goals and Scope decisions present", "")
 
 
+def is_history(name, line):
+    """A FINDINGS entry, a kept review, or a done queue row cites a requirement as it read when written;
+    rewriting the citation to the newest version would make the record false. R10 versions the
+    requirement, not the history of it."""
+    return name == "FINDINGS.md" or name.startswith("REVIEW-") or (name == "QUEUE.md" and re.search(r"\|\s*done\b", line, re.I) is not None)
+
+
 def check_citations(repo, req, version, ids):
     if not ids:
         return Finding("citations", "SE1/R10", NONE, "no requirement IDs to cite", "")
     bare, stale, ahead, unknown = [], [], [], []
     pat = re.compile(r"(?:(REQ(\d+))/)?\b(" + "|".join(map(re.escape, ids)) + r")\b")
     copy, _ = find_copy(repo)  # the working agreement's own examples (REQ2/UI-1) are not citations
-    for f in tracked_files(repo):
+    files, left_out = own_files(repo)
+    note = left_out_note(left_out)
+    design = re.compile(r"DESIGN_v(\d+)\.md$")
+    designs = [int(m.group(1)) for m in (design.match(f.name) for f in files) if m]
+    for f in files:
         if f.resolve() == req.resolve() or not is_text(f) or f.name.startswith("REQUIREMENTS_v"):
+            continue
+        old = design.match(f.name)  # a superseded design cites requirements as they read then, as FINDINGS does
+        if old and int(old.group(1)) < max(designs):
             continue
         if f.name == "AGENTS.md" or f.name == "se.py" or (copy and f.resolve() == copy.resolve()):
             continue
         for i, line in enumerate(read(f).splitlines(), 1):
+            last = None  # list shorthand: in `REQ2/UI-1, UI-2`, the bare ID takes the version named before it
             for m in pat.finditer(line):
-                where = f"{f.relative_to(repo)}:{i}"
-                if not m.group(1):
+                where = f"{f.relative_to(repo).as_posix()}:{i}"
+                ver = m.group(2) or last
+                if m.group(2):
+                    last = m.group(2)
+                if not ver:
                     bare.append(where)
-                elif int(m.group(2)) < ids[m.group(3)]:
-                    stale.append(f"{where} REQ{m.group(2)}/{m.group(3)} (since v{ids[m.group(3)]})")
-                elif int(m.group(2)) > version:
+                elif int(ver) < ids[m.group(3)]:
+                    if not is_history(f.name, line):
+                        stale.append(f"{where} REQ{ver}/{m.group(3)} (since v{ids[m.group(3)]})")
+                elif int(ver) > version:
                     ahead.append(where)
     if stale or bare or ahead:
         parts = []
@@ -397,21 +495,71 @@ def check_citations(repo, req, version, ids):
             parts.append(f"{len(bare)} unversioned: {bare[0]}")
         if ahead:
             parts.append(f"{len(ahead)} ahead of v{version}: {ahead[0]}")
-        return Finding("citations", "SE1/R10", FAIL, "; ".join(parts),
+        return Finding("citations", "SE1/R10", FAIL, "; ".join(parts) + note,
                        "cite the version that last changed the requirement: REQn/ID, never a bare ID")
-    return Finding("citations", "SE1/R10", PASS, f"every citation of the {len(ids)} requirement IDs is versioned and current", "")
+    return Finding("citations", "SE1/R10", PASS, f"every citation of the {len(ids)} requirement IDs is versioned and current{note}", "")
 
 
-def check_trace(repo, ids):
+def judged_ids(req):
+    """The requirements marked (judged): only a named person can pass them (SE1/U10)."""
+    if not req:
+        return []
+    return [m.group(1) for m in REQ_MARKS_RE.finditer(read(req)) if "*(judged)*" in m.group(3)]
+
+
+def latest_verdicts(repo, judged, since):
+    """{id: (date, 'pass'|'FAIL', judge)}, the newest verdict on each requirement as it now reads. A verdict
+    is one line with the versioned ID, `verdict: pass` or `verdict: fail`, `by` the judge, and a date. On one
+    day a failure outranks a pass. A test may veto and cannot pass, so a line in a test file is not a verdict,
+    and neither is an example in the agreement, a copy, or a requirements document. Who wrote the line, and
+    which version of the work it was given on, are not checked: the row names the judge for a person to read."""
+    copy, _ = find_copy(repo)
+    found = {}
+    for f in own_files(repo)[0]:
+        rel = str(f.relative_to(repo))
+        if (not is_text(f) or re.search(r"test", rel, re.I) or f.name.startswith("REQUIREMENTS_v")
+                or f.name in ("AGENTS.md", "se.py") or (copy and f.resolve() == copy.resolve())):
+            continue
+        for line in read(f).splitlines():
+            outcome, judge = VERDICT_RE.search(line), JUDGE_RE.search(line)
+            dates = DATE_RE.findall(line)
+            if not (outcome and judge and dates):
+                continue
+            failed = outcome.group(1).lower() in ("fail", "failed", "no", "rejected")
+            for i in judged:
+                m = re.search(rf"REQ(\d+)/{re.escape(i)}\b", line)
+                if m and int(m.group(1)) >= since[i]:
+                    new = (max(dates), failed, judge.group(1))
+                    if i not in found or new[:2] > found[i][:2]:
+                        found[i] = new
+    return {i: (d, "FAIL" if failed else "pass", who) for i, (d, failed, who) in found.items()}
+
+
+def check_trace(repo, ids, judged=()):
     if not ids:
         return Finding("trace", "SE1/R11", NONE, "no requirements to trace", "")
-    tests = [f for f in tracked_files(repo) if is_text(f) and re.search(r"test", str(f.relative_to(repo)), re.I)]
+    tested = [i for i in ids if i not in judged]
+    verdicts = latest_verdicts(repo, judged, ids)
+    waiting = [i for i in judged if verdicts.get(i, (0, "FAIL"))[1] != "pass"]
+    note = ""
+    if judged:
+        note = (f"; {len(judged)} judged, passed by a person and not by a test: "
+                + ", ".join(f"{i} (verdict {verdicts[i][1]} {verdicts[i][0]} by {verdicts[i][2]})" if i in verdicts else f"{i} (no verdict yet)" for i in judged[:5])
+                + (" ..." if len(judged) > 5 else ""))
+    files, left_out = own_files(repo)
+    note += left_out_note(left_out)
+    tests = [f for f in files if is_text(f) and re.search(r"test", str(f.relative_to(repo)), re.I)]
     text = "\n".join(read(f) for f in tests)
-    without = [i for i in ids if not re.search(rf"REQ\d+/{re.escape(i)}\b", text)]
+    without = [i for i in tested if not re.search(rf"REQ\d+/{re.escape(i)}\b", text)]
     if without:
-        return Finding("trace", "SE1/R11", WARN, f"{len(without)} of {len(ids)} requirements have no test naming them: "
-                       + ", ".join(without[:5]) + (" ..." if len(without) > 5 else ""), "each is a queue item, not a failure")
-    return Finding("trace", "SE1/R11", PASS, f"every one of the {len(ids)} requirements has a test naming it", "")
+        return Finding("trace", "SE1/R11", WARN, f"{len(without)} of {len(tested)} requirements have no test naming them: "
+                       + ", ".join(without[:5]) + (" ..." if len(without) > 5 else "") + note, "each is a queue item, not a failure")
+    if waiting:
+        return Finding("trace", "SE1/R11", WARN, f"every one of the {len(tested)} tested requirements has a test naming it" + note,
+                       "ask the judge; record one line: the versioned ID, verdict: pass or verdict: fail, by the judge, and the date")
+    if not tested:
+        return Finding("trace", "SE1/R11", PASS, f"no tested requirements{note}", "")
+    return Finding("trace", "SE1/R11", PASS, f"every one of the {len(tested)} requirements has a test naming it" + note, "")
 
 
 def parse_table(text):
@@ -493,13 +641,14 @@ def doctor(repo, online=True, cache_dir=None, fetch=default_fetch, today=None):
                    "" if rel["made"] else "run again with the network")]
     out.append(check_copy(repo, rel))
     out.append(check_loads(repo))
+    out.append(check_quickref(repo))
     out.append(check_hooks(repo))
     guide, cmd = check_guide(repo)
     out.append(guide)
     out.append(check_working_set(repo))
     req, version, ids = latest_requirements(repo)
     out.append(check_citations(repo, req, version, ids) if req else Finding("citations", "SE1/R10", NONE, "no requirements", ""))
-    out.append(check_trace(repo, ids))
+    out.append(check_trace(repo, ids, judged_ids(req)))
     out.append(check_queue(repo, today))
     out.append(check_commits(repo))
     out.append(check_ci(repo, cmd))
@@ -509,7 +658,7 @@ def doctor(repo, online=True, cache_dir=None, fetch=default_fetch, today=None):
 # ---------------------------------------------------------------- the session's self test
 
 def default_power():
-    """('ac'|'battery'|'none', percent|None, sleep_prevented: bool)"""
+    """('ac'|'battery'|'none', percent|None, sleep_prevented: True|False|None), None where nothing here can say."""
     if sys.platform == "darwin":
         rc, out = run(["pmset", "-g", "batt"], timeout=5)
         if rc == 0 and "InternalBattery" in out:
@@ -518,12 +667,83 @@ def default_power():
             rc2, out2 = run(["pmset", "-g"], timeout=5)
             return src, int(pct.group(1)) if pct else None, "sleep prevented" in out2
         return "none", None, False
-    bats = list(Path("/sys/class/power_supply").glob("BAT*")) if Path("/sys/class/power_supply").exists() else []
-    if bats:
-        status = read(bats[0] / "status").strip().lower()
-        cap = read(bats[0] / "capacity").strip()
-        return ("battery" if status == "discharging" else "ac"), (int(cap) if cap.isdigit() else None), False
-    return "none", None, False
+    if sys.platform == "win32":
+        import ctypes  # only here: the standard library's way to the one call that needs no elevation
+
+        class Status(ctypes.Structure):  # SYSTEM_POWER_STATUS
+            _fields_ = [("ac", ctypes.c_ubyte), ("flag", ctypes.c_ubyte), ("percent", ctypes.c_ubyte),
+                        ("saver", ctypes.c_ubyte), ("life", ctypes.c_ulong), ("full", ctypes.c_ulong)]
+        status = Status()
+        if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+            return "none", None, None
+        return power_windows(status.ac, status.flag, status.percent)
+    return power_linux(Path("/sys/class/power_supply"), linux_sleep_blocked)
+
+
+def power_windows(ac, flag, percent):
+    """From SYSTEM_POWER_STATUS. Whether sleep is prevented is `powercfg /requests`, which needs elevation: not asked."""
+    if flag in (128, 255):  # no system battery; unknown
+        return "none", None, None
+    return ("battery" if ac == 0 else "ac"), (None if percent == 255 else percent), None
+
+
+def power_linux(root, blocked):
+    """A system battery by its type, since the names vary, and a mouse's battery (scope Device) is not one."""
+    root = Path(root)
+    bats = [d for d in sorted(root.iterdir()) if read(d / "type").strip() == "Battery"
+            and read(d / "scope").strip().lower() != "device"] if root.is_dir() else []
+    if not bats:
+        return "none", None, None
+    draining = [d for d in bats if read(d / "status").strip().lower() == "discharging"]
+    cap = read((draining or bats)[0] / "capacity").strip()
+    return ("battery" if draining else "ac"), (int(cap) if cap.isdigit() else None), blocked()
+
+
+def sleep_blocked(listing):
+    """From `systemd-inhibit --list`: True if an inhibitor blocks sleep, False if none does, None if it did not answer.
+    A delay inhibitor only postpones sleep. Columns by the header's offsets, since WHY is free text."""
+    rows = listing.splitlines()
+    if not rows:
+        return None
+    head = rows[0]
+    if "WHAT" not in head or "WHY" not in head:
+        return False
+    what, why = head.index("WHAT"), head.index("WHY")
+    return any(r.rstrip().endswith(" block") and "sleep" in r[what:why].strip().split(":") for r in rows[1:])
+
+
+def linux_sleep_blocked():
+    rc, out = run(["systemd-inhibit", "--list", "--no-pager"], timeout=5)
+    return sleep_blocked(out) if rc == 0 else None
+
+
+def stay_awake(platform, which=shutil.which):
+    """This platform's way to keep the machine from sleeping, or None where there is none to name."""
+    if platform == "darwin":
+        return "`caffeinate -i` while the session runs"
+    if platform == "win32":
+        return "set sleep to never in the power settings while the session runs"
+    if which("systemd-inhibit"):
+        return "`systemd-inhibit --what=sleep <your command>` for the session"
+    return None
+
+
+def tree_bytes(path, seconds=10):
+    """Bytes in the files under path, or None if that takes too long: this runs in a hook, on any platform."""
+    stop, total, pending = time.monotonic() + seconds, 0, [path]
+    while pending:
+        if time.monotonic() > stop:
+            return None
+        try:
+            with os.scandir(pending.pop()) as entries:
+                for e in entries:
+                    if e.is_dir(follow_symlinks=False):
+                        pending.append(e.path)
+                    elif e.is_file(follow_symlinks=False):
+                        total += e.stat(follow_symlinks=False).st_size
+        except OSError:
+            continue  # a file gone mid-walk, or a folder not readable: an estimate, as the line says
+    return total
 
 
 def default_disk(path):
@@ -532,17 +752,22 @@ def default_disk(path):
     return u.free / 1e9, u.total / 1e9
 
 
+def project_slug(path):
+    """The folder name under ~/.claude/projects. A Windows drive's colon cannot be in a folder name."""
+    return re.sub(r"[/\\:]", "-", path)
+
+
 def transcript_for(repo, hook_input):
     if hook_input.get("transcript_path") and Path(hook_input["transcript_path"]).is_file():
         return Path(hook_input["transcript_path"])
-    slug = str(Path(repo).resolve()).replace("/", "-").replace("\\", "-")
+    slug = project_slug(str(Path(repo).resolve()))
     d = Path.home() / ".claude" / "projects" / slug
     files = sorted(d.glob("*.jsonl"), key=lambda p: p.stat().st_mtime) if d.is_dir() else []
     return files[-1] if files else None
 
 
 def read_transcript(path):
-    """(compactions: list of (pre, post, trigger), context_tokens_estimate)"""
+    """(compactions: list of (pre, post, trigger, timestamp), context_tokens_estimate)"""
     comps, ctx = [], None
     try:
         with open(path, encoding="utf8", errors="replace") as f:
@@ -555,7 +780,7 @@ def read_transcript(path):
                     continue
                 meta = ev.get("compactMetadata")
                 if isinstance(meta, dict):
-                    comps.append((meta.get("preTokens"), meta.get("postTokens"), meta.get("trigger")))
+                    comps.append((meta.get("preTokens"), meta.get("postTokens"), meta.get("trigger"), ev.get("timestamp")))
                 if ev.get("type") == "assistant":
                     u = (ev.get("message") or {}).get("usage") or {}
                     if u:
@@ -563,6 +788,30 @@ def read_transcript(path):
     except OSError:
         pass
     return comps, ctx
+
+
+def is_this_compaction(comp, now):
+    """Does this transcript record belong to the compaction that fired the hook, and not an earlier one?"""
+    try:
+        when = dt.datetime.fromisoformat(str(comp[3]).replace("Z", "+00:00"))
+        return abs((now - when).total_seconds()) <= COMPACTION_NEW_SECONDS
+    except (ValueError, TypeError):
+        return False
+
+
+def mission_and_shape(repo):
+    """The mission and fundamental shape as written, for an agent whose summary may have lost them (SE1/D9)."""
+    req, _, _ = latest_requirements(repo)
+    if not req:
+        return []
+    text, found = read(req), []
+    for name in ("Mission", "(?:Fundamental )?[Ss]hape"):  # plain "Shape": documents from before v1.5
+        m = re.search(rf"^##\s+{name}\s*$(.*?)(?=^##\s|\Z)", text, re.M | re.S)
+        for item in re.split(r"^- ", m.group(1), flags=re.M)[1:] if m else []:
+            item = re.split(r"\s+Judge:", " ".join(item.split()))[0]
+            if not re.search(r"(?:^|\s)_\S|\*\*[^*]+:\*\*\s*\*", item):  # a template's blank, or a line left to fill
+                found.append(f"  {item}")
+    return [f"the mission and fundamental shape, from {req.name}; the source, not your summary (SE1/D9):"] + found if found else []
 
 
 def torn_state(repo, today=None):
@@ -586,7 +835,7 @@ def torn_state(repo, today=None):
     return out
 
 
-def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk, transcript=None, today=None):
+def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk, transcript=None, today=None, now=None, sleep=time.sleep, platform=sys.platform):
     """Lines of the self test, and the verdict ('fragile'|'robust')."""
     env = os.environ if env is None else env
     hook_input = hook_input or {}
@@ -594,7 +843,8 @@ def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk
     lines, reasons, fragile, refuse = [], [], False, []
     claude = bool(env.get("CLAUDECODE"))
     runner = "Claude Code" if claude else "a runner that is not Claude Code (not inspected)"
-    mux = bool(env.get("TMUX") or env.get("STY"))
+    # Zellij sets ZELLIJ to "0", so this asks whether it is set, not whether it reads true.
+    mux = next((name for var, name in (("TMUX", "tmux"), ("STY", "screen"), ("ZELLIJ", "Zellij")) if env.get(var)), None)
     ssh = bool(env.get("SSH_CONNECTION") or env.get("SSH_TTY"))
     container = Path("/.dockerenv").exists() or bool(env.get("CI")) or bool(env.get("GITHUB_ACTIONS")) \
         or "docker" in read("/proc/1/cgroup") or "containerd" in read("/proc/1/cgroup")
@@ -604,18 +854,18 @@ def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk
         reasons.append("container or CI: robust, and no human to ask")
     elif ssh and not mux:
         fragile = True
-        reasons.append("over SSH with no tmux or screen: a dropped connection likely ends this session (inferred from the terminal, not from the runner)")
+        reasons.append("over SSH with no tmux, screen, or Zellij: a dropped connection likely ends this session (inferred from the terminal, not from the runner)")
     elif not mux:
         fragile = True
-        reasons.append("a local terminal with no tmux or screen: a closed lid or a crash likely ends this session (inferred from the terminal, not from the runner)")
+        reasons.append("a local terminal with no tmux, screen, or Zellij: a closed lid or a crash likely ends this session (inferred from the terminal, not from the runner)")
     else:
-        reasons.append("under a multiplexer: the session survives a dropped connection or a closed window")
+        reasons.append(f"under a multiplexer ({mux}): terminal processes survive a dropped connection or a closed window; what the runner itself keeps is not inspected")
     src, pct, prevented = power()
     if src == "battery":
         fragile = True
         reasons.append(f"a laptop on battery ({pct}%)")
     elif src == "ac" and pct is not None:
-        reasons.append(f"a laptop on AC power ({pct}%){'; sleep prevented' if prevented else '; sleep not prevented'}")
+        reasons.append(f"a laptop on AC power ({pct}%){'; sleep not inspected' if prevented is None else '; sleep prevented' if prevented else '; sleep not prevented'}")
         if not prevented:
             fragile = True
     if claude:
@@ -626,13 +876,29 @@ def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk
     comps, ctx = read_transcript(t) if t else ([], None)
     source = hook_input.get("source")
     own = bool(hook_input.get("transcript_path"))  # a hook names the session's transcript; by hand we guess the newest
-    if source == "compact" or (comps and source != "startup"):
-        pre, post_, trig = comps[-1] if comps else (None, None, None)
+    recorded = True
+    if source == "compact":  # the hook can run before the transcript has this compaction (FINDINGS 2026-11-02)
+        now = now or dt.datetime.now(dt.timezone.utc)
+        for _ in range(10):
+            recorded = bool(comps) and is_this_compaction(comps[-1], now)
+            if recorded or not t:
+                break
+            sleep(0.2)
+            comps, ctx = read_transcript(t)
+    if source == "compact" and not recorded:
+        fragile = True
+        lines.append(f"YOU WERE COMPACTED just now. The transcript has not recorded it yet, so its size is not known here "
+                     f"({len(comps)} earlier on record). Everything above this line is recalled, not observed; the source "
+                     "wins (SE1/A11).")
+        lines += mission_and_shape(repo)
+    elif source == "compact" or (comps and source != "startup"):
+        pre, post_, trig, _ = comps[-1] if comps else (None, None, None, None)
         fragile = True
         if own or source == "compact":
             lines.append(f"YOU WERE COMPACTED: {len(comps)} time(s) this session; the last ({trig}) replaced "
                          f"{pre or '?'} tokens with {post_ or '?'}. Everything above this line is recalled, not "
                          "observed; the source wins (SE1/A11).")
+            lines += mission_and_shape(repo)
         else:
             reasons.append(f"the newest transcript for this repository records {len(comps)} compaction(s), the last "
                            f"({trig}) replacing {pre or '?'} tokens with {post_ or '?'}; if that is your session, your "
@@ -651,9 +917,9 @@ def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk
         reasons.append(f"disk {free:.0f} GB free of {total:.0f}")
     claude_dir = Path.home() / ".claude" / "projects"
     if claude and claude_dir.is_dir():
-        rc, out = run(["du", "-sk", str(claude_dir)], timeout=10)
-        if rc == 0 and out.split():
-            reasons.append(f"transcripts in ~/.claude/projects: {int(out.split()[0]) / 1e6:.1f} GB, and growing")
+        size = tree_bytes(claude_dir)
+        if size is not None:
+            reasons.append(f"transcripts in ~/.claude/projects: {size / 1e9:.1f} GB, and growing")
     torn = torn_state(repo, today)
     if torn:
         fragile = True
@@ -673,11 +939,12 @@ def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk
                      "the source wins over the summary.")
         lessen = []
         if not mux and not container:
-            lessen.append("run under tmux or screen")
+            lessen.append("run under tmux in WSL" if platform == "win32" else "run under tmux or screen")
         if src == "battery":
             lessen.append("plug in")
-        if src != "none" and not prevented and sys.platform == "darwin":
-            lessen.append("`caffeinate -i` while the session runs")
+        awake = stay_awake(platform) if src != "none" and not prevented else None
+        if awake:
+            lessen.append(awake)
         if not container:
             lessen.append("a remote host where the session survives this machine")
         if free < LOW_DISK_GB:
@@ -692,7 +959,9 @@ def post(repo, hook_input=None, env=None, power=default_power, disk=default_disk
 
 # ---------------------------------------------------------------- hook, self, main
 
-def hook_entry(se_cmd="python3 se.py --post"):
+def hook_entry(se_cmd=None, platform=sys.platform):
+    # Windows' python3, where it answers at all, is often the Store's stub, which installs instead of running.
+    se_cmd = se_cmd or f"{'python' if platform == 'win32' else 'python3'} se.py --post"
     return {"hooks": {"SessionStart": [{"matcher": "startup|resume|compact",
                                         "hooks": [{"type": "command", "command": se_cmd}]}]}}
 

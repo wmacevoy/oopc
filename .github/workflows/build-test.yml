@@ -156,6 +156,34 @@ jobs:
       - name: Test JS binding
         run: make test-js
 
+  # REQ4/INV-4, REQ4/BLD-3: both inverted models, on GCC (Linux) and clang
+  # (macOS), at the Python floor and the newest. No lock file exists to cache
+  # against, so each run resolves fresh.
+  inverted:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        pixi-env: [default, py39]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          cache: false
+          locked: false
+          environments: ${{ matrix.pixi-env }}
+
+      - name: Test (C, C++, Python via ctypes)
+        run: pixi run -e ${{ matrix.pixi-env }} make test
+
+      - name: Test the inverted models
+        run: |
+          pixi run -e ${{ matrix.pixi-env }} make clean
+          pixi run -e ${{ matrix.pixi-env }} make cpp1 cpp2 test-inverted
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [native, wasm]

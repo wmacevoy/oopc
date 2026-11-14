@@ -21,7 +21,7 @@ static void check(const char *label, double got, double want)
   }
 }
 
-/* What OM-2 promises an object costs: its vtable pointer and its fields,
+/* What REQ2/OM-2 promises an object costs: its vtable pointer and its fields,
    laid out by the compiler like any other struct on this target. */
 struct PlainBottle      { const void *vftbl; double volume; };
 struct PlainSizedBottle { const void *vftbl; double volume; double maxVolume; };

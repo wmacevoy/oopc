@@ -129,6 +129,7 @@ class Klass:
         self.base_name = None
         self.fields = []            # (type, name) declared by THIS class
         self.methods = []           # virtual methods declared by THIS class
+        self.object_params = set()  # model classes its parameters point at
         self.ctor = None            # the default constructor cursor
         self.dtor = None            # the virtual destructor cursor
 
@@ -191,6 +192,16 @@ def check_type(t, cursor, what):
             "flattened without inventing an ownership rule." % (where(cursor), what, t))
 
 
+def object_param(a):
+    """The class a parameter points at, if it is `C *` or `const C *` for a file-scope class."""
+    if a.type.kind != ci.TypeKind.POINTER:
+        return None
+    decl = a.type.get_pointee().get_declaration()
+    if decl.kind == CK.CLASS_DECL and decl.semantic_parent.kind == CK.TRANSLATION_UNIT:
+        return decl.spelling
+    return None
+
+
 def read_class(cursor, path):
     k = Klass(cursor)
     seen = set()
@@ -214,6 +225,10 @@ def read_class(cursor, path):
 
         elif c.kind == CK.FIELD_DECL:
             check_type(c.type.spelling, c, "field '%s'" % c.spelling)
+            if any(x.kind.is_expression() for x in c.get_children()):
+                raise Unsupported(
+                    "%s: field '%s' has a default initializer, which would be lost: "
+                    "assign it in the constructor body." % (where(c), c.spelling))
             k.fields.append((c.type.spelling, c.spelling))
 
         elif c.kind == CK.CONSTRUCTOR:
@@ -229,6 +244,10 @@ def read_class(cursor, path):
                     % where(c))
             if k.ctor is not None:
                 raise Unsupported("%s: more than one constructor." % where(c))
+            if any(x.kind != CK.COMPOUND_STMT for x in c.get_children()):
+                raise Unsupported(
+                    "%s: %s has a constructor initializer list, which would be lost: "
+                    "assign in the constructor body." % (where(c), k.name))
             k.ctor = c
 
         elif c.kind == CK.DESTRUCTOR:
@@ -248,6 +267,10 @@ def read_class(cursor, path):
                     "non-virtual method has no slot, so a host language calling "
                     "through the C ABI could not reach the right one."
                     % (where(c), k.name, c.spelling))
+            if c.is_pure_virtual_method():
+                raise Unsupported(
+                    "%s: %s::%s is pure virtual.  It has no body to become a slot, "
+                    "and C has no abstract class." % (where(c), k.name, c.spelling))
             if c.spelling in seen:
                 raise Unsupported(
                     "%s: %s::%s is overloaded.  C has one name per function; "
@@ -256,7 +279,15 @@ def read_class(cursor, path):
             seen.add(c.spelling)
             check_type(c.result_type.spelling, c, "return of '%s'" % c.spelling)
             for a in c.get_arguments():
-                check_type(a.type.spelling, a, "parameter '%s'" % a.spelling)
+                if any(x.kind.is_expression() for x in a.get_children()):
+                    raise Unsupported(
+                        "%s: parameter '%s' has a default argument, which C cannot "
+                        "express." % (where(a), a.spelling))
+                target = object_param(a)
+                if target:
+                    k.object_params.add(target)
+                else:
+                    check_type(a.type.spelling, a, "parameter '%s'" % a.spelling)
             k.methods.append(Method(c, k.name))
 
         elif c.kind in (CK.CLASS_TEMPLATE, CK.FUNCTION_TEMPLATE):
@@ -283,7 +314,30 @@ def read_class(cursor, path):
 #   m(a)         (own virtual)  ->  Class_m(me, a)               (virtual)
 # Anything else must already be valid C; the generator does not check that, the
 # C compiler does.
+#
+# A pointer parameter is the only other receiver:
+#   p->x                        ->  p->x                         (fields are flat)
+#   p->m(a)                     ->  Owner_m((Owner *)p, a)       (virtual)
 # ---------------------------------------------------------------------------
+
+def strip(cursor):
+    """Past the implicit-conversion wrappers libclang leaves around an expression."""
+    while cursor.kind == CK.UNEXPOSED_EXPR:
+        children = list(cursor.get_children())
+        if len(children) != 1:
+            break
+        cursor = children[0]
+    return cursor
+
+
+def explicit_receiver(member_ref):
+    """What a member is reached through, or None when that is `this`."""
+    # Not every child is the receiver: the `Base::` in Base::m() is a type reference.
+    children = [c for c in strip(member_ref).get_children() if c.kind.is_expression()]
+    if children and strip(children[0]).kind != CK.CXX_THIS_EXPR:
+        return children[0]
+    return None
+
 
 class Body:
     def __init__(self, source_bytes, klass, classes):
@@ -301,7 +355,7 @@ class Body:
 
         if k == CK.MEMBER_REF_EXPR:
             ref = cursor.referenced
-            if ref is not None and ref.kind == CK.FIELD_DECL:
+            if ref is not None and ref.kind == CK.FIELD_DECL and explicit_receiver(cursor) is None:
                 e = cursor.extent
                 self.edits.append((e.start.offset, e.end.offset, "me->" + ref.spelling))
                 return                       # covers the implicit `this` too
@@ -330,7 +384,19 @@ class Body:
         ce = callee.extent
 
         qualified = "::" in self.text(callee)
-        if qualified:
+        receiver = explicit_receiver(callee)
+        if receiver is not None:
+            # Without this, the branches below would call the method on `me`.
+            target = strip(receiver)
+            named = target.kind == CK.DECL_REF_EXPR and target.referenced.kind == CK.PARM_DECL
+            if qualified or not named:
+                raise Unsupported(
+                    "%s: a call through another object must be parameter->method(...), "
+                    "unqualified." % where(cursor))
+            const = "const " if ref.is_const_method() else ""
+            name = "%s_%s" % (owner, ref.spelling)
+            recv = "(%s%s *)%s" % (const, owner, target.spelling)
+        elif qualified:
             # Bottle::setVolume(v) -- a non-virtual, chain-to-base call.  This is
             # the one src/SizedBottle.c warns about: it MUST become the _vf_
             # implementation, never the dispatcher, or it recurses forever.
@@ -366,8 +432,15 @@ class Body:
         if body is None:
             return ""
         self.edits = []
+        prev_line = body.extent.start.line
         for c in body.get_children():
             self.walk(c)
+            # One statement per line: kept on one line, `if (x) y; z;` is
+            # rejected by GCC's -Wmisleading-indentation.
+            if c.extent.start.line == prev_line:
+                at = c.extent.start.offset
+                self.edits.append((at, at, "\n"))
+            prev_line = c.extent.end.line
 
         e = body.extent
         start, end = e.start.offset, e.end.offset
@@ -421,6 +494,10 @@ def emit_header(k, src_name):
     L.append('#include "%s.h"' % k.base.name if k.base else '#include "Type.h"')
     L += ["", "#ifdef __cplusplus", 'extern "C" {', "#endif", ""]
     L += ["  struct %sStruct;" % n, "  typedef struct %sStruct %s;" % (n, n), ""]
+    # Forward, not #include: two classes may take pointers to each other.
+    own = [c.name for c in k.chain]
+    for other in sorted(k.object_params - set(own)):
+        L += ["  struct %sStruct;" % other, "  typedef struct %sStruct %s;" % (other, other), ""]
 
     L.append("  /* Every slot takes %s * -- the ROOT base type -- so a derived class" % root)
     L.append("     inherits a slot by naming the same function pointer, with no cast. */")
@@ -480,7 +557,9 @@ def emit_source(k, src_name, body):
     derived = k.base is not None
     L = [BANNER % (src_name, n), "", "#include <stdlib.h>"]
     L += system_includes(body.src)
-    L += ["", '#include "%s.h"' % n, '#include "Trace.h"', ""]
+    L += ["", '#include "%s.h"' % n]
+    L += ['#include "%s.h"' % other for other in sorted(k.object_params - {n})]
+    L += ['#include "Trace.h"', ""]
 
     def downcast():
         """The line every override in src/SizedBottle.c writes by hand."""
@@ -605,8 +684,11 @@ def main():
     sysroot = []
     if sys.platform == "darwin":
         sysroot += probe(["xcrun", "--show-sdk-path"], "-isysroot")
-    sysroot += probe([os.environ.get("CC", "cc"), "-print-resource-dir"],
+    resource = probe([os.environ.get("CC", "cc"), "-print-resource-dir"],
                      "-resource-dir")
+    # GCC has no resource directory; its builtin headers are found this way.
+    sysroot += resource or probe([os.environ.get("CC", "cc"), "-print-file-name=include"],
+                                 "-isystem")
     os.makedirs(args.out, exist_ok=True)
 
     classes = {}
@@ -621,6 +703,11 @@ def main():
                 print("oopcc: %s" % d, file=sys.stderr)
             return 1
         for c in tu.cursor.get_children():
+            if (c.kind == CK.NAMESPACE and c.location.file
+                    and os.path.abspath(c.location.file.name) == os.path.abspath(path)):
+                raise Unsupported(
+                    "%s: a namespace in a model would hide its classes from the "
+                    "generator: declare them at file scope." % where(c))
             if (c.kind == CK.CLASS_DECL and c.is_definition()
                     and c.location.file
                     and os.path.abspath(c.location.file.name) == os.path.abspath(path)):
@@ -628,20 +715,33 @@ def main():
                 classes[k.name] = k
                 order.append((k, path))
 
+    if not order:
+        raise Unsupported("no model class in the sources: only a `class` at file "
+                          "scope is flattened, and `struct` is left alone.")
+
     for k, _ in order:
         if k.base_name:
             if k.base_name not in classes:
                 raise Unsupported("%s: base '%s' was not among the sources."
                                   % (k.name, k.base_name))
             k.base = classes[k.base_name]
+        for other in sorted(k.object_params):
+            if other not in classes:
+                raise Unsupported("%s: a parameter points at '%s', which was not among "
+                                  "the sources." % (k.name, other))
 
+    # Emit everything before writing anything: a refusal leaves no partial output.
+    emitted = []
     for k, path in order:
         src = open(path, "rb").read()
         body = Body(src, k, classes)
         name = os.path.basename(path)
-        open(os.path.join(args.out, k.name + ".h"), "w").write(emit_header(k, name))
-        open(os.path.join(args.out, k.name + ".c"), "w").write(emit_source(k, name, body))
-        print("oopcc: %s -> %s/%s.{h,c}" % (name, args.out, k.name))
+        emitted.append((k.name, name, emit_header(k, name), emit_source(k, name, body)))
+
+    for cname, name, header, source in emitted:
+        open(os.path.join(args.out, cname + ".h"), "w").write(header)
+        open(os.path.join(args.out, cname + ".c"), "w").write(source)
+        print("oopcc: %s -> %s/%s.{h,c}" % (name, args.out, cname))
     return 0
 
 

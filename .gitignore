@@ -5,3 +5,6 @@ dist/
 __pycache__/
 *.pyc
 node_modules/
+.pixi/
+pixi.lock
+cpp2/gen/

@@ -1,5 +1,5 @@
 /* Tests for the C++ wrapper.  Run: make test-cpp
-   CXX-1 and CXX-2 are static_asserts in the headers: if this compiles, they
+   REQ1/CXX-1 and REQ1/CXX-2 are static_asserts in the headers: if this compiles, they
    hold.  Labels name the requirement checked, from docs/REQUIREMENTS_v2.md. */
 
 #include <stdio.h>

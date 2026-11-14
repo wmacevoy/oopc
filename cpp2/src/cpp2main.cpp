@@ -5,9 +5,9 @@
   written -- real `virtual`, real overrides, a real C++ vtable.  Nothing here
   knows the generator exists.
 
-  The output is the same as bin/cbottle2, which runs the *generated C* against
-  the unmodified src/cmain.c.  That is the cpp-2 claim in one line: the C++ and
-  the C mean the same thing.
+  Its behaviour matches bin/cbottle2, which runs the *generated C* against the
+  unmodified src/cmain.c; cpp2/src/checks.inc holds the two to that.  That is
+  the cpp-2 claim in one line: the C++ and the C mean the same thing.
 
   What the C++ object costs here that the C one does not: nothing extra in
   bytes -- both are a vtable pointer plus the fields -- but the C++ vtable is

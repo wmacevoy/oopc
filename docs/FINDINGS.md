@@ -7,6 +7,81 @@ Blameless: say what would have found it, not who should have asked
 
 Entries before 2026-10-26 are rebuilt from commit messages; their dates are the commit dates.
 
+## Verdicts
+
+One line each, by the named judge of a *(judged)* requirement (SE1/W11).
+
+- REQ4/MISSION-1 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-1 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ5/SHAPE-2 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-3 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-4 verdict: pass by Warren MacEvoy, 2026-11-09
+- REQ4/SHAPE-5 verdict: pass by Warren MacEvoy, 2026-11-09
+
+## 2026-11-09 — every layout assert fires; a mistyped slot is an error only under some compilers
+
+- **What happened:** with one change each in a scratch copy, all 13 asserts failed with their own
+  message: the size, alignment and standard-layout asserts in `include/*.hpp`, and the
+  byte-identical, alignment, standard-layout and vtable asserts in `cpp1/`. A mistyped vtable slot
+  is an error under clang 23 and under CI's `-Werror`, but under plain GCC 12 it is a warning and the
+  object builds, so REQ2/OM-3's "a mistyped slot is a compile error" does not hold for a default
+  `make` on that compiler.
+- **Kind:** K3 — the claim was checked on the compiler the author used.
+- **Cost:** none; found by QUEUE #5.
+- **Findable by:** seeing a guard refuse on each compiler that is supposed to enforce it (SE1/T3).
+- **Changed:** the Makefile passes `-Werror=incompatible-pointer-types` (`CCHECKS`) on every C
+  compile, outside `CFLAGS` so an override keeps it. Seen: the mistyped slot fails a plain `make`
+  on GCC 12, and builds with one warning under `make CCHECKS=`.
+
+## 2026-11-09 — the generator accepted C++ it then mistranslated
+
+- **What happened:** run against a real adopter's headers and against that code's style, `cpp2/oopcc.py`
+  dropped default member initializers and constructor initializer lists, leaving fields
+  uninitialized with no warning; lost default arguments; emitted a body with no return for a pure
+  virtual method; and, for `struct`s or classes in a namespace, wrote nothing and exited 0.
+  REQ1/INV-2 and the README both said it refuses what it cannot flatten.
+- **Kind:** K3 — the refusal tests covered the cases someone had thought of. Bottle's model never
+  used these forms.
+- **Cost:** none shipped; found by attempting a rewrite outside the repository.
+- **Findable by:** running the generator on code not written for it.
+- **Changed:** each is now refused, with a test seen failing (`cpp2/test_oopcc.py`). A call to a
+  static member still generates a bad call that only the C compiler catches; not fixed.
+
+## 2026-11-09 — the generator's body translation assumed every receiver was `this`
+
+- **What happened:** adding pointer parameters (QUEUE #17), `other->x` would have become `me->x`, valid
+  C using the wrong object. The check that refused pointers was also what kept this unreachable.
+- **Kind:** K2 — a guard hid an assumption nobody had to state.
+- **Cost:** found before shipping, by reading the translator before relaxing the check.
+- **Findable by:** asking what a refusal protects before removing it.
+- **Changed:** the receiver is translated, other forms are refused, and turning the translation off
+  fails a test.
+
+## 2026-11-09 — the inverted models had never run under GCC or in CI, and one check could not fail
+
+- **What happened:** the first run on Linux failed in `cpp2/test_oopcc.py` under
+  `-Wmisleading-indentation`, and libclang could not find GCC's builtin headers. Separately, `make`
+  printed `model runs as ordinary C++: PASS` for a program with no assertions.
+- **Kind:** K3 — a `PASS` with no way to say wrong (SE1/U7).
+- **Cost:** two generator fixes, found on the first real run.
+- **Findable by:** CI on every platform (SE1/O3), and asking what would make each `PASS` fail.
+- **Changed:** the `inverted` CI job (REQ4/INV-4), and `cpp2/src/checks.inc` compiled against both
+  sides (REQ4/INV-3).
+
+## 2026-11-09 — a real adopter kept the naming and lifecycle and dropped the vtable
+
+- **What happened:** a private C++ project adopted this pattern for its C API. It kept
+  `Class_method(me, ...)` and `init`/`fini`, and replaced the vtable, prefix layout and `Type` with an
+  opaque smart-pointer handle. Inheritance stays inside C++. Rewriting its classes in the `cpp2/`
+  shape worked for numeric classes (4,398 comparisons with the original, 0 differences at equal
+  optimization) and could not express the rest: held objects, strings, buffers, constructors with
+  arguments. Its exception handling was applied per function and missed some; its copy of an early
+  version of this pattern still taught mutable, lazily filled tables.
+- **Kind:** K2 — what real use needs from the gateway was not visible from two classes.
+- **Cost:** none; found by reading it.
+- **Findable by:** asking an adopter, which is why the requirements now name them.
+- **Changed:** REQ5/SHAPE-2 names the handle route; `docs/ADOPTING.md` carries its guidelines.
+
 ## 2026-10-26 — the C++ demo printed `sizeof` as `unsigned long`
 
 - **What happened:** the first run of the new `i386` CI job failed to compile `src/cppmain.cpp`:

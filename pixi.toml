@@ -1,0 +1,19 @@
+# Tools the C and C++ builds do not get from the system. No lock file is committed
+# (.gitignore), so this resolves fresh on each of the platforms below.
+[workspace]
+name = "oopc"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
+
+[dependencies]
+python = ">=3.9"
+
+[pypi-dependencies]
+libclang = "*"
+
+# The oldest Python supported (REQ4/BLD-3): `pixi run -e py39 ...`.
+[feature.py39.dependencies]
+python = "3.9.*"
+
+[environments]
+py39 = ["py39"]
