@@ -324,8 +324,9 @@ test-rust-inv : bin/cbottle bin/cbottle-rust-inv bin/test_c-rust-inv bin/test_ru
 # from Rust.  Type.c and Trace.c are still C, compiled by the same clang; no
 # libc and no Rust library is linked, and malloc/free stay imports.  rustc
 # needs core for wasm32-unknown-unknown, which the pixi `wasm` environment has.
+# No -g, as in the raw build: debug sections would triple the module.
 tmp/rust-inv.wasm.o : $(RUSTINV_SRCS)
-	$(RUSTC) $(RUSTFLAGS) --target wasm32-unknown-unknown --crate-type=lib --emit=obj -O -C panic=abort -o $@ $<
+	$(RUSTC) --edition 2021 --target wasm32-unknown-unknown --crate-type=lib --emit=obj -O -C panic=abort -o $@ $<
 
 bin/oopc.rust-inv.wasm : tmp/rust-inv.wasm.o src/Type.c src/Trace.c $(wildcard include/*.h)
 	@test -d $(WASI_SYSROOT) || { echo "no wasi-libc sysroot at $(WASI_SYSROOT); set WASI_SYSROOT=<dir>"; exit 1; }
